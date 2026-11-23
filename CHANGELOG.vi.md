@@ -16,6 +16,17 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
+-
+
+### Thay đổi
+-
+
+### Sửa lỗi
+-
+
+## [2.2.0] - 2026-11-24
+
+### Thêm
 - Thông tin người đăng trên ảnh, giống video: trên máy tính hiện khi di chuột vào ảnh; trên điện thoại luôn hiện một dòng thu gọn (tên + một dòng nội dung), chạm để mở rộng.
 - Tiêu đề riêng cho từng mục trong bài có nhiều ảnh/video: mỗi mục hiện đoạn chữ nằm sát nó (tự nhận biết tiêu đề nằm trên hay dưới ảnh theo từng bài), vị trí trong bài ("2/5 trong bài") và nút *Xem cả bài*.
 - Tuỳ chọn riêng để hiện thông tin trên ảnh và trên video (mặc định đều bật). Phím **I** bật/tắt loại đang xem.
