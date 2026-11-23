@@ -19,10 +19,11 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 -
 
 ### Thay đổi
--
+- Nút chuyển ảnh trước / sau thành nút tròn to hơn, nền đậm, nổi rõ trên mọi ảnh và video.
 
 ### Sửa lỗi
--
+- Nút chuyển ảnh trước / sau nằm đúng giữa chiều cao ảnh/video, thay vì giữa cả vùng gồm dải ảnh thu nhỏ.
+- Trên điện thoại, dòng trạng thái dài không còn đẩy nút đóng xuống một hàng riêng.
 
 ## [2.1.0] - 2026-11-24
 

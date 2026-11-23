@@ -744,7 +744,7 @@
   box-shadow:0 24px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden;transform:scale(.97);transition:transform .18s}
 .xtg-open .xtg-modal{transform:none}
 .xtg-top{position:relative;display:flex;align-items:center;gap:4px 8px;padding:7px 8px 7px 16px;border-bottom:1px solid #24262c;flex-wrap:wrap}
-.xtg-head{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0}
+.xtg-head{display:flex;align-items:center;gap:6px;flex:1 1 0;min-width:0}
 .xtg-tools{display:flex;align-items:center;gap:2px}
 .xtg-sep{width:1px;height:20px;background:#2a2d33;margin:0 4px}
 .xtg-short{display:none}
@@ -767,7 +767,8 @@
 .xtg-body{flex:1;min-height:0;position:relative}
 .xtg-viewer{position:absolute;inset:0;display:flex;flex-direction:column}
 .xtg-viewer[hidden],.xtg-scroll[hidden]{display:none}
-.xtg-stage{flex:1;min-height:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+.xtg-stagebox{flex:1;min-height:0;position:relative;display:flex}
+.xtg-stage{flex:1;min-width:0;min-height:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
   user-select:none;-webkit-user-select:none;touch-action:none}
 .xtg-stage>img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;transition:transform .2s;will-change:transform}
 .xtg-stage>img.zoomed{cursor:grab}
@@ -776,11 +777,14 @@
 .xtg-stage>iframe{width:min(100%,calc((100vh - 200px)*16/9));aspect-ratio:16/9;max-height:100%;border:0;background:#000}
 .xtg-msg{color:#8b9097;text-align:center;padding:20px;line-height:1.8}
 .xtg-msg a{color:#8fb8ff}
-.xtg-nav{display:flex;align-items:center;justify-content:center;position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;
-  border-radius:999px;border:0;background:rgba(30,32,36,.72);color:#fff;cursor:pointer;z-index:4}
-.xtg-nav:hover{background:rgba(60,63,70,.92)}
-.xtg-nav:disabled{opacity:.25;pointer-events:none}
-.xtg-prev{left:12px}.xtg-next{right:12px}
+.xtg-nav{display:flex;align-items:center;justify-content:center;position:absolute;top:50%;transform:translateY(-50%);width:52px;height:52px;
+  padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:rgba(12,13,16,.72);color:#fff;cursor:pointer;z-index:4;
+  box-shadow:0 2px 10px rgba(0,0,0,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:background .15s,transform .15s}
+.xtg-nav:active{transform:translateY(-50%) scale(.94)}
+.xtg-nav:hover{background:rgba(31,111,235,.9);border-color:transparent}
+.xtg-nav:disabled{opacity:.3;pointer-events:none}
+.xtg-prev{left:14px}.xtg-next{right:14px}
+.xtg-prev .xtg-i{margin-right:2px}.xtg-next .xtg-i{margin-left:2px}
 .xtg-strip{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;border-top:1px solid #24262c;background:#0f1013;
   scrollbar-width:thin;scrollbar-color:#3a3d44 transparent;min-height:72px}
 .xtg-th{flex:0 0 auto;width:72px;height:54px;border-radius:5px;overflow:hidden;cursor:pointer;position:relative;opacity:.5;
@@ -872,9 +876,9 @@ a.xtg-name:hover{text-decoration:underline}
 @media (max-width:700px){
   .xtg-modal{width:100vw;height:100vh;height:100dvh;border-radius:0}
   .xtg-grid{grid-template-columns:repeat(auto-fill,minmax(105px,1fr))}
-  .xtg-nav{width:38px;height:38px;background:rgba(20,22,26,.55)}
-  .xtg-nav .xtg-i{width:22px;height:22px}
-  .xtg-prev{left:6px}.xtg-next{right:6px}
+  .xtg-nav{width:44px;height:44px;background:rgba(12,13,16,.68)}
+  .xtg-nav .xtg-i{width:24px;height:24px}
+  .xtg-prev{left:8px}.xtg-next{right:8px}
   /* toolbar: row 1 = counter, status, stop, close; row 2 = labelled tools, icon above label */
   .xtg-top{padding:4px 4px 0 12px;gap:0}
   .xtg-head{order:1;height:40px}
@@ -934,9 +938,11 @@ a.xtg-name:hover{text-decoration:underline}
         </div>
         <div class="xtg-body">
           <div class="xtg-viewer">
-            <div class="xtg-stage"></div>
-            <button class="xtg-nav xtg-prev" title="${esc(tr('prev'))}">${ic('left', 26)}</button>
-            <button class="xtg-nav xtg-next" title="${esc(tr('next'))}">${ic('right', 26)}</button>
+            <div class="xtg-stagebox">
+              <div class="xtg-stage"></div>
+              <button class="xtg-nav xtg-prev" title="${esc(tr('prev'))}" aria-label="${esc(tr('prev'))}">${ic('left', 28)}</button>
+              <button class="xtg-nav xtg-next" title="${esc(tr('next'))}" aria-label="${esc(tr('next'))}">${ic('right', 28)}</button>
+            </div>
             <div class="xtg-strip"></div>
           </div>
           <div class="xtg-scroll" hidden>

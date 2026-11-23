@@ -19,10 +19,11 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 -
 
 ### Changed
--
+- Previous / next buttons are larger round buttons with a solid background, so they stand out on any image or video.
 
 ### Fixed
--
+- Previous / next buttons are centred on the image/video instead of on the area including the filmstrip.
+- On phones, a long status line no longer pushes the close button onto its own row.
 
 ## [2.1.0] - 2026-11-24
 
