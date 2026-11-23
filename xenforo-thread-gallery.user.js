@@ -53,6 +53,10 @@
   const THUMB_CONCURRENCY = 2;     // video thumbnails looked up at once
   const SLIDE_MS = 3500;           // slideshow delay for images
   const SLIDE_EMBED_MS = 15000;    // slideshow delay for embedded players
+  const PAGE_TIMEOUT_MS = 20000;   // give up on a thread page request after this long (then retry)
+  const LOAD_SKIP_MS = 15000;      // autoplay skips an item that has not loaded after this long (not marked broken)
+  const SLOW_NOTICE_MS = 5000;     // show "the server is responding slowly" after this long
+  const QUEUE_SLOT_MS = 10000;     // a slow thumbnail / preload gives its queue slot away after this long
 
   const IMG_EXT = /\.(jpe?g|png|gif|webp|avif|bmp|jfif)$/i;
   const VID_EXT = /\.(mp4|webm|mov|m4v|ogv)$/i;
@@ -97,6 +101,7 @@
       dead: 'Removed or failed to load',
       deadLong: 'This image/video was removed or failed to load.',
       openOriginal: 'Open original link ↗',
+      slowMsg: 'The server is responding slowly…', retry: 'Retry',
       page: (n) => `Page ${n}`,
       pageOf: (p, n) => `Page ${p}/${n}`,
       fAll: 'All', fImages: 'Images', fVideos: 'Videos', filterTip: 'Show only this kind',
@@ -143,6 +148,7 @@
       dead: 'Đã bị xoá hoặc không tải được',
       deadLong: 'Ảnh/video này đã bị xoá hoặc không tải được.',
       openOriginal: 'Mở link gốc ↗',
+      slowMsg: 'Máy chủ phản hồi chậm…', retry: 'Thử lại',
       page: (n) => `Trang ${n}`,
       pageOf: (p, n) => `Trang ${p}/${n}`,
       fAll: 'Tất cả', fImages: 'Ảnh', fVideos: 'Video', filterTip: 'Chỉ hiện loại này',
@@ -611,16 +617,31 @@
     return (n) => (n === 1 ? base : base + 'page-' + n);
   }
 
+  // One attempt plus up to 3 retries. Each attempt is aborted after PAGE_TIMEOUT_MS so a hanging request
+  // cannot stall the page queue; a page that still fails is counted as an error and loading moves on.
   async function fetchDoc(url) {
+    let lastError = null;
     for (let i = 0; i < 4; i++) {
-      const r = await fetch(url, { credentials: 'include' });
-      if (r.ok) return parseHTML(await r.text());
-      if (r.status !== 429 && r.status < 500) throw new Error('HTTP ' + r.status);
-      // rate limited / server error: honour Retry-After when given, otherwise back off progressively
-      const retryAfter = parseInt(r.headers.get('Retry-After'), 10);
-      await sleep(retryAfter > 0 ? Math.min(retryAfter, 120) * 1000 : 5000 * (i + 1));
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), PAGE_TIMEOUT_MS);
+      let wait = 5000 * (i + 1);
+      try {
+        const r = await fetch(url, { credentials: 'include', signal: ctrl.signal });
+        if (r.ok) return parseHTML(await r.text());
+        if (r.status !== 429 && r.status < 500) throw Object.assign(new Error('HTTP ' + r.status), { final: true });
+        // rate limited / server error: honour Retry-After when given, otherwise back off progressively
+        const retryAfter = parseInt(r.headers.get('Retry-After'), 10);
+        if (retryAfter > 0) wait = Math.min(retryAfter, 120) * 1000;
+        lastError = new Error('HTTP ' + r.status);
+      } catch (e) {
+        if (e.final) throw e;
+        lastError = e; // timeout or network error
+      } finally {
+        clearTimeout(timer);
+      }
+      if (i < 3) await sleep(wait);
     }
-    throw new Error('too many retries');
+    throw lastError || new Error('too many retries');
   }
 
   // iframe URL, including lazy embeds from s9e MediaSites and XenForo
@@ -815,6 +836,9 @@
     slideshow: store.get('autoplay', true), // autoplay is on by default; the choice is remembered
     slideTimer: null,
     unwireVideo: null,
+    renderId: 0,             // bumped on every render of the viewer
+    curReady: false,         // the current item has loaded
+    slowTimer: null,
     stripTouched: 0,
     filter: store.get('filter', 'all'), // all | image | video (video includes embedded players)         // last time the user scrolled the filmstrip by hand
     gen: 0,                  // bumped by "Reload" so late results of the previous load are ignored
@@ -932,6 +956,11 @@
 /* until the image/video has loaded, keep the poster info and the tag out of the way */
 .xtg-stage.xtg-loading .xtg-reel-info,.xtg-stage.xtg-loading .xtg-corner{opacity:0;visibility:hidden}
 .xtg-stage.xtg-loading .xtg-reel-img{pointer-events:none;background:transparent}
+.xtg-slow{position:absolute;left:50%;top:calc(50% + 34px);transform:translateX(-50%);z-index:3;display:flex;flex-wrap:wrap;
+  align-items:center;justify-content:center;gap:6px 12px;max-width:calc(100% - 24px);padding:8px 14px;border-radius:10px;
+  background:rgba(12,13,16,.82);color:#d6d9de;font-size:13px;text-align:center}
+.xtg-slow button{padding:4px 12px;border:0;border-radius:6px;background:#1f6feb;color:#fff;font:600 12.5px system-ui,sans-serif;cursor:pointer}
+.xtg-slow a{color:#8fb8ff;text-decoration:none}
 .xtg-stage.xtg-loading::after{content:'';position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;z-index:2;
   border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:xtg-spin .8s linear infinite;pointer-events:none}
 @keyframes xtg-spin{to{transform:rotate(360deg)}}
@@ -1181,6 +1210,7 @@ a.xtg-name:hover{text-decoration:underline}
         case 'filter': ui.fmenu.hidden = !ui.fmenu.hidden; ui.menu.hidden = true; break;
         case 'hosts': ui.menu.hidden = true; editHosts(); break;
         case 'reload': reloadThread(); break;
+        case 'retry': renderStage(); break;
         default: break;
       }
     });
@@ -1572,6 +1602,7 @@ a.xtg-name:hover{text-decoration:underline}
       if (!img.isConnected || img.getAttribute('src')) { done(); return; }
       // scrolled out of view while waiting in the queue (autoplay, dragging): wait until it is visible again
       if (!nearView(img)) { lazyObserver.observe(img); done(); return; }
+      setTimeout(done, QUEUE_SLOT_MS); // slow host: let the next thumbnail start, this one keeps loading
       loadImage(img, item, urls, () => { onFail(); done(); }, (src) => { if (!item.shown) item.shown = src; done(); });
     }));
     lazyObserver.observe(img);
@@ -1586,6 +1617,7 @@ a.xtg-name:hover{text-decoration:underline}
         if (S.cur !== item || x.working) { done(); return; } // the user moved on: skip stale preloads
         const im = new Image();
         im.fetchPriority = 'low';
+        setTimeout(done, QUEUE_SLOT_MS);
         loadImage(im, x, x.candidates.slice(), done, (src) => { fillThumb(x, src); done(); });
       }));
     });
@@ -2260,9 +2292,32 @@ a.xtg-name:hover{text-decoration:underline}
     return false;
   }
 
+  // The current item has loaded: drop the spinner / slow notice, show the info, start the autoplay delay.
+  // rid ties the call to one render, so a late load from an earlier render (e.g. before "Retry") is ignored.
+  function mediaReady(rid) {
+    if (rid !== S.renderId) return;
+    S.curReady = true;
+    clearTimeout(S.slowTimer);
+    ui.stage.classList.remove('xtg-loading');
+    const notice = ui.stage.querySelector('.xtg-slow');
+    if (notice) notice.remove();
+    if (S.slideshow) scheduleSlide();
+  }
+
+  function showSlowNotice(item, rid) {
+    if (rid !== S.renderId || S.curReady) return;
+    const notice = el('div', { className: 'xtg-slow' });
+    notice.innerHTML = `<span>${esc(tr('slowMsg'))}</span><button data-act="retry">${esc(tr('retry'))}</button>` +
+      (item.source ? `<a href="${esc(item.source)}" target="_blank" rel="noopener noreferrer">${esc(tr('openOriginal'))}</a>` : '');
+    ui.stage.appendChild(notice);
+  }
+
   function renderStage() {
     if (!ui || S.view !== 'viewer') return;
     const item = S.cur;
+    const rid = ++S.renderId;
+    S.curReady = false;
+    clearTimeout(S.slowTimer);
     Z = { s: 1, x: 0, y: 0 };
     ui.stage.querySelectorAll('video').forEach((x) => x.pause());
     ui.stage.innerHTML = '';
@@ -2286,7 +2341,7 @@ a.xtg-name:hover{text-decoration:underline}
         // the full image has loaded before: it comes straight from the browser cache
         ui.stage.classList.add('xtg-loading');
         loadImage(img, item, uniq([item.working, ...item.candidates]), () => markDead(item), (src) => {
-          if (img.isConnected) ui.stage.classList.remove('xtg-loading');
+          mediaReady(rid);
           fillThumb(item, src);
           preloadAround(item);
         });
@@ -2320,10 +2375,10 @@ a.xtg-name:hover{text-decoration:underline}
           clearTimeout(midTimer);
           if (mid && !mid.complete) mid.src = ''; // the full image won: drop the medium request
           fillThumb(item, src); // also when the user has already moved on
-          if (S.cur !== item || !img.isConnected) return;
+          if (rid !== S.renderId) return;
           img.src = src;
           img.classList.remove('xtg-preview');
-          ui.stage.classList.remove('xtg-loading');
+          mediaReady(rid);
           preloadAround(item);
         });
       }
@@ -2332,7 +2387,7 @@ a.xtg-name:hover{text-decoration:underline}
       const v = mediaEl('video', { autoplay: true, muted: !!S.muted });
       if (item.thumb) v.poster = item.thumb;
       ui.stage.classList.add('xtg-loading');
-      v.addEventListener('loadeddata', () => { if (v.isConnected) ui.stage.classList.remove('xtg-loading'); }, { once: true });
+      v.addEventListener('loadeddata', () => mediaReady(rid), { once: true });
       loadVideo(v, item, () => videoFail(item));
       v.addEventListener('ended', () => { if (S.slideshow) nextOrStop(); });
       ui.stage.appendChild(v);
@@ -2354,6 +2409,11 @@ a.xtg-name:hover{text-decoration:underline}
     scheduleStatus();
 
     if (item.type !== 'image' && !item.dead) setTimeout(() => { if (S.cur === item) preloadAround(item); }, 1000);
+    if (item.type === 'embed' || item.dead) {
+      S.curReady = true; // nothing to wait for
+    } else if (!S.curReady) {
+      S.slowTimer = setTimeout(() => showSlowNotice(item, rid), SLOW_NOTICE_MS);
+    }
     if (S.slideshow) scheduleSlide();
   }
 
@@ -2362,10 +2422,14 @@ a.xtg-name:hover{text-decoration:underline}
   // ---------------------------------------------------------------------------
   function nextOrStop() { if (!step(1, false)) stopSlideshow(); }
 
+  // Autoplay timing: the delay starts once the item has loaded (videos advance when they end);
+  // an item still loading after LOAD_SKIP_MS is skipped, without being marked broken.
   function scheduleSlide() {
     clearTimeout(S.slideTimer);
     const item = S.cur;
-    if (!item || item.type === 'video') return; // videos advance when they end
+    if (!S.slideshow || !item) return;
+    if (!S.curReady) { S.slideTimer = setTimeout(nextOrStop, LOAD_SKIP_MS); return; }
+    if (item.type === 'video') return;
     S.slideTimer = setTimeout(nextOrStop, item.type === 'embed' ? SLIDE_EMBED_MS : SLIDE_MS);
   }
 

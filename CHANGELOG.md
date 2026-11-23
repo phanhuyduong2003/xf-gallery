@@ -16,13 +16,15 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
--
+- Slow-server notice: after 5 seconds of loading, a message with **Retry** and **Open original link** appears (the poster info stays hidden until the media has loaded).
 
 ### Changed
+- Autoplay starts its delay only once the image has loaded, and skips an item that has not loaded after 15 seconds (without marking it broken).
 - While an image or video is still loading, only the spinner is shown: the poster info and the Thread starter / Member tag appear once it has loaded.
 
 ### Fixed
--
+- A thread page that never answered stalled the whole thread: requests now give up after 20 seconds and are retried up to 3 times, then the page is counted as failed and loading continues.
+- Slow thumbnails no longer block the thumbnail queue: each gives its slot away after 10 seconds and keeps loading in the background. The same applies to preloading.
 
 ## [2.3.0] - 2026-11-24
 

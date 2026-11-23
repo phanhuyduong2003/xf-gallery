@@ -16,13 +16,15 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
--
+- Thông báo máy chủ chậm: sau 5 giây tải, hiện thông báo kèm nút **Thử lại** và **Mở link gốc** (thông tin người đăng vẫn ẩn cho tới khi tải xong).
 
 ### Thay đổi
+- Tự động phát chỉ bắt đầu đếm giờ khi ảnh đã tải xong, và bỏ qua mục nào sau 15 giây vẫn chưa tải xong (không đánh dấu hỏng).
 - Khi ảnh hoặc video còn đang tải, chỉ hiện vòng xoay: thông tin người đăng và nhãn Tác giả chủ đề / Thành viên hiện khi tải xong.
 
 ### Sửa lỗi
--
+- Một trang chủ đề không phản hồi làm treo cả quá trình tải: yêu cầu giờ được huỷ sau 20 giây và thử lại tối đa 3 lần, sau đó trang được tính là lỗi và các trang sau vẫn tải tiếp.
+- Ảnh thu nhỏ tải chậm không còn chặn hàng đợi: mỗi ảnh nhường chỗ sau 10 giây và vẫn tiếp tục tải ngầm. Việc tải trước ảnh kế bên cũng vậy.
 
 ## [2.3.0] - 2026-11-24
 
