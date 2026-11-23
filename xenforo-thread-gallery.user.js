@@ -1,0 +1,1759 @@
+// ==UserScript==
+// @name             XenForo Thread Gallery
+// @name:vi          XenForo Thread Gallery – Album ảnh/video cho chủ đề
+// @namespace        xenforo-thread-gallery
+// @author           Dylan Phan
+// @version          2.0.0
+// @description      Collects every image and video across all pages of a XenForo thread into one seamless gallery: viewer, grid and scroll modes, Reels-style video player, poster labels, resolves image-host links (Chevereto, Imgur, Streamable…) and skips dead media.
+// @description:vi   Gom toàn bộ ảnh và video qua mọi trang của một chủ đề XenForo thành một album xem liền mạch: xem từng ảnh, lưới, cuộn dọc, trình phát video kiểu Reels, nhãn người đăng, tự lấy file thật từ link dịch vụ ảnh (Chevereto, Imgur, Streamable…) và bỏ qua ảnh/video đã chết.
+// @license          MIT
+// @icon             data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231f6feb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 22H4a2 2 0 0 1-2-2V6'/%3E%3Cpath d='m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18'/%3E%3Ccircle cx='12' cy='8' r='2'/%3E%3Crect width='16' height='16' x='6' y='2' rx='2'/%3E%3C/svg%3E
+// @match            *://*/*threads/*
+// @match            *://*/*index.php?threads/*
+// @grant            GM_xmlhttpRequest
+// @grant            GM.xmlHttpRequest
+// @grant            GM_registerMenuCommand
+// @connect          *
+// @run-at           document-idle
+// @noframes
+// ==/UserScript==
+
+/*
+ * Icons: Lucide (https://lucide.dev), ISC License. Only the icons used here are inlined.
+ */
+
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Only run on XenForo (1.x or 2.x) thread pages
+  // ---------------------------------------------------------------------------
+  const docEl = document.documentElement;
+  const isXenForo = docEl.id === 'XF' || docEl.id === 'XenForo' || docEl.hasAttribute('data-xf') ||
+    !!document.querySelector('.bbWrapper, .messageText');
+  if (!isXenForo || !document.querySelector('article.message, li.message')) return;
+
+  // ---------------------------------------------------------------------------
+  // Config
+  // ---------------------------------------------------------------------------
+  // Hosts whose links point to a *viewer page* rather than the file itself.
+  // The script fetches that page in the background to find the real file (og:image / og:video).
+  // An entry without a dot (e.g. "zpic") matches any domain containing that text.
+  const DEFAULT_HOSTS = [
+    'anh.moe', 'zpic', 'ibb.co', 'imgbb.com', 'postimg.cc', 'postimages.org',
+    'pixhost.to', 'imagebam.com', 'imgbox.com', 'imagetwist.com', 'lensdump.com',
+    'jpg.church', 'jpg.pet', 'jpg5.su', 'imgchest.com', 'pixeldrain.com',
+  ];
+  const PAGE_CONCURRENCY = 2;      // thread pages fetched at once
+  const RESOLVE_CONCURRENCY = 4;   // external links resolved at once
+  const THUMB_CONCURRENCY = 2;     // video thumbnails looked up at once
+  const SLIDE_MS = 3500;           // slideshow delay for images
+  const SLIDE_EMBED_MS = 15000;    // slideshow delay for embedded players
+
+  const IMG_EXT = /\.(jpe?g|png|gif|webp|avif|bmp|jfif)$/i;
+  const VID_EXT = /\.(mp4|webm|mov|m4v|ogv)$/i;
+  const BODY_SEL = '.message-userContent .bbWrapper, .message-body .bbWrapper, .messageText, .bbWrapper';
+
+  // ---------------------------------------------------------------------------
+  // i18n (English by default, Vietnamese when the browser language is Vietnamese)
+  // ---------------------------------------------------------------------------
+  const LANG = (navigator.language || 'en').toLowerCase().startsWith('vi') ? 'vi' : 'en';
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const STR = {
+    en: {
+      fab: 'Album',
+      fabTip: 'View every image and video in this thread',
+      menuOpen: 'Open thread gallery',
+      menuHosts: 'Edit image host list',
+      dialog: 'Thread gallery',
+      slideshow: 'Slideshow', slideshowTip: 'Slideshow (Space)',
+      post: 'Post', postTip: 'Open the post containing this item',
+      source: 'Source', sourceTip: 'Open the original link',
+      view: 'View', viewTip: 'One at a time',
+      grid: 'Grid', gridTip: 'Thumbnail grid (G)',
+      scroll: 'Scroll', scrollTip: 'Vertical scroll',
+      stop: 'Stop', stopTip: 'Stop loading the remaining pages',
+      options: 'Options', close: 'Close (Esc)', prev: 'Previous (←)', next: 'Next (→)',
+      optLabel: 'Show poster info on videos (I)',
+      optLabelImg: 'Show poster info on images too',
+      optDead: 'Show broken items in grid / scroll',
+      optHosts: 'Edit image host list…',
+      searching: 'Looking for images and videos…',
+      none: 'No images or videos found.',
+      loading: 'Loading…',
+      counts: (i, v) => `${plural(i, 'image', 'images')} · ${plural(v, 'video', 'videos')}`,
+      broken: (n) => ` · ${n} broken`,
+      loadingPages: (a, b, p) => ` · loading page ${a}/${b}` + (p ? ` (${plural(p, 'link', 'links')})` : ''),
+      stopped: (a, b) => ` · stopped at ${a}/${b} pages`,
+      pageErrors: (n) => ` · ${plural(n, 'page', 'pages')} failed`,
+      dead: 'Removed or failed to load',
+      deadLong: 'This image/video was removed or failed to load.',
+      openOriginal: 'Open original link ↗',
+      page: (n) => `Page ${n}`,
+      postLink: 'post ↗', sourceLink: 'source ↗', video: 'video',
+      op: 'Thread starter', member: 'Member',
+      more: 'Show more', less: 'Show less',
+      playTip: 'Play / pause (K)', muteTip: 'Mute / unmute (M)', fsTip: 'Fullscreen (F)',
+      hostsPrompt: 'Image/video hosts whose links point to a viewer page instead of the file (comma-separated).\n' +
+        'The script opens that page to find the real file. Entries without a dot match any domain containing that text.\n' +
+        'Leave empty to restore the defaults.',
+      saved: 'Saved. Reload the page to apply it to this thread.',
+    },
+    vi: {
+      fab: 'Album',
+      fabTip: 'Xem toàn bộ ảnh/video của chủ đề',
+      menuOpen: 'Mở album chủ đề',
+      menuHosts: 'Sửa danh sách dịch vụ ảnh',
+      dialog: 'Album ảnh và video',
+      slideshow: 'Trình chiếu', slideshowTip: 'Trình chiếu (Space)',
+      post: 'Bài gốc', postTip: 'Mở bài viết chứa mục này',
+      source: 'Nguồn', sourceTip: 'Mở link gốc',
+      view: 'Xem', viewTip: 'Xem từng ảnh',
+      grid: 'Lưới', gridTip: 'Lưới ảnh thu nhỏ (G)',
+      scroll: 'Cuộn', scrollTip: 'Cuộn dọc',
+      stop: 'Dừng tải', stopTip: 'Dừng tải các trang còn lại',
+      options: 'Tuỳ chọn', close: 'Đóng (Esc)', prev: 'Trước (←)', next: 'Sau (→)',
+      optLabel: 'Hiện nhãn người đăng trên video (phím I)',
+      optLabelImg: 'Hiện nhãn người đăng cả trên ảnh',
+      optDead: 'Hiện mục hỏng ở chế độ lưới / cuộn',
+      optHosts: 'Sửa danh sách dịch vụ ảnh…',
+      searching: 'Đang tìm ảnh và video…',
+      none: 'Không tìm thấy ảnh hoặc video nào.',
+      loading: 'Đang tải…',
+      counts: (i, v) => `${i} ảnh · ${v} video`,
+      broken: (n) => ` · ${n} hỏng`,
+      loadingPages: (a, b, p) => ` · đang tải trang ${a}/${b}` + (p ? ` (${p} link)` : ''),
+      stopped: (a, b) => ` · đã dừng ở ${a}/${b} trang`,
+      pageErrors: (n) => ` · ${n} trang lỗi`,
+      dead: 'Đã bị xoá hoặc không tải được',
+      deadLong: 'Ảnh/video này đã bị xoá hoặc không tải được.',
+      openOriginal: 'Mở link gốc ↗',
+      page: (n) => `Trang ${n}`,
+      postLink: 'bài gốc ↗', sourceLink: 'nguồn ↗', video: 'video',
+      op: 'Tác giả chủ đề', member: 'Thành viên',
+      more: 'Xem thêm', less: 'Thu gọn',
+      playTip: 'Phát / tạm dừng (K)', muteTip: 'Tắt / bật tiếng (M)', fsTip: 'Toàn màn hình (F)',
+      hostsPrompt: 'Tên miền dịch vụ lưu ảnh/video mà link trỏ tới trang xem ảnh thay vì file (cách nhau bằng dấu phẩy).\n' +
+        'Script mở trang đó để lấy file thật. Mục không có dấu chấm sẽ khớp mọi tên miền chứa chuỗi đó.\n' +
+        'Để trống để khôi phục mặc định.',
+      saved: 'Đã lưu. Tải lại trang để áp dụng cho chủ đề này.',
+    },
+  };
+  const tr = (key, ...args) => {
+    const v = STR[LANG][key] !== undefined ? STR[LANG][key] : STR.en[key];
+    return typeof v === 'function' ? v(...args) : v;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Settings (localStorage of the forum's domain)
+  // ---------------------------------------------------------------------------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('xtg_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('xtg_' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+  };
+  let hosts = store.get('hosts', DEFAULT_HOSTS);
+
+  // ---------------------------------------------------------------------------
+  // Utilities
+  // ---------------------------------------------------------------------------
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const uniq = (arr) => [...new Set(arr.filter(Boolean))];
+  const abs = (u, base) => { try { return new URL(u, base || location.href); } catch (e) { return null; } };
+  const bareHost = (h) => h.replace(/^www\./, '').toLowerCase();
+  const hostOf = (u) => { const x = abs(u); return x ? bareHost(x.hostname) : ''; };
+  const isHttp = (u) => !!u && /^https?:$/.test(u.protocol);
+  // Chevereto thumbnails: name.md.jpg / name.th.jpg -> name.jpg
+  const stripChevereto = (u) => u && u.replace(/\.(md|th)(\.[a-z0-9]+)(\?.*)?$/i, '$2$3');
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const parseHTML = (html) => new DOMParser().parseFromString(html, 'text/html');
+  const el = (tag, props) => Object.assign(document.createElement(tag), props);
+
+  const ICONS = {
+    play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+    pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+    ext: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+    image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+    images: '<path d="M18 22H4a2 2 0 0 1-2-2V6"/><path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"/><circle cx="12" cy="8" r="2"/><rect width="16" height="16" x="6" y="2" rx="2"/>',
+    grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+    rows: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M21 9H3"/><path d="M21 15H3"/>',
+    stop: '<circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
+    settings: '<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    left: '<path d="m15 18-6-6 6-6"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
+    dead: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+    vol: '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
+    mute: '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/>',
+    max: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+    video: '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+  };
+  const ic = (name, size = 18, fill = false) =>
+    `<svg class="xtg-i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${fill ? 'currentColor' : 'none'}" stroke="currentColor" ` +
+    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+
+  function hostListed(h) {
+    return hosts.some((entry) => {
+      const e = entry.trim().toLowerCase();
+      if (!e) return false;
+      return e.includes('.') ? h === e || h.endsWith('.' + e) : h.includes(e);
+    });
+  }
+
+  // XenForo image/link proxy: /proxy.php?image=... or ?link=...
+  function unproxy(u) {
+    if (u && /proxy\.php/.test(u.pathname + u.search)) {
+      const x = abs(u.searchParams.get('image') || u.searchParams.get('link') || '');
+      if (x && isHttp(x)) return x;
+    }
+    return u;
+  }
+
+  // Normalised key used to de-duplicate the same media found several times (quotes, thumbnails, proxies)
+  function keyOf(u) {
+    const x = unproxy(abs(u));
+    return x ? (bareHost(x.hostname) + stripChevereto(x.pathname) + x.search).toLowerCase() : String(u);
+  }
+
+  function makeQueue(limit) {
+    let active = 0;
+    const waiting = [];
+    const next = () => {
+      while (active < limit && waiting.length) {
+        const { fn, res, rej } = waiting.shift();
+        active++;
+        Promise.resolve().then(fn).then(res, rej).finally(() => { active--; next(); });
+      }
+    };
+    return (fn) => new Promise((res, rej) => { waiting.push({ fn, res, rej }); next(); });
+  }
+  const resolveQueue = makeQueue(RESOLVE_CONCURRENCY);
+  const thumbQueue = makeQueue(THUMB_CONCURRENCY);
+
+  // Cross-origin GET through the userscript manager (falls back to fetch, which only works with CORS)
+  function gmGet(url, binary, headers) {
+    return new Promise((resolve, reject) => {
+      const fn = typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest
+        : (typeof GM !== 'undefined' && GM && GM.xmlHttpRequest) ? GM.xmlHttpRequest.bind(GM) : null;
+      if (!fn) {
+        fetch(url, { headers })
+          .then(async (r) => resolve({ status: r.status, response: binary ? await r.blob() : await r.text(), finalUrl: r.url }), reject);
+        return;
+      }
+      fn({
+        method: 'GET', url, headers, timeout: 25000,
+        responseType: binary ? 'blob' : undefined,
+        onload: (r) => resolve({ status: r.status, response: binary ? r.response : r.responseText, finalUrl: r.finalUrl || url }),
+        onerror: reject,
+        ontimeout: reject,
+      });
+    });
+  }
+
+  async function gmJSON(url, headers) {
+    const r = await gmGet(url, false, headers);
+    return { status: r.status, data: r.status === 200 ? JSON.parse(r.response) : null };
+  }
+
+  // Download an image through the manager (bypasses hotlink protection) and return a blob: URL
+  async function gmBlobUrl(urls) {
+    for (const u of urls) {
+      try {
+        const r = await gmGet(u, true);
+        const b = r.response;
+        if (r.status === 200 && b && b.size > 200 && /^(image|video)\//.test(b.type || '')) return URL.createObjectURL(b);
+      } catch (e) { /* try the next URL */ }
+    }
+    throw new Error('blob download failed');
+  }
+
+  const metaContent = (doc, ...names) => {
+    for (const n of names) {
+      const m = doc.querySelector(`meta[property="${n}"], meta[name="${n}"]`);
+      if (m && m.getAttribute('content')) return m.getAttribute('content');
+    }
+    return null;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Link -> media
+  // A "spec" is { type: 'image'|'video'|'embed'|'dead', candidates?, url?, thumb?, source }.
+  // resolveLink returns: spec[] | Promise<spec[] | 'DEAD'> (with .source) | null (not media).
+  // ---------------------------------------------------------------------------
+  function youtubeId(u) {
+    const h = u.hostname.replace(/^www\.|^m\./, '');
+    if (h === 'youtu.be') return u.pathname.slice(1).split('/')[0] || null;
+    if (/youtube(-nocookie)?\.com$/.test(h)) {
+      if (u.searchParams.get('v')) return u.searchParams.get('v');
+      const m = u.pathname.match(/\/(embed|shorts|live|v)\/([\w-]{6,})/);
+      if (m) return m[2];
+    }
+    return null;
+  }
+
+  const deferred = (source, job) => Object.assign(resolveQueue(job), { source });
+
+  function resolveLink(raw, base) {
+    let u = abs(raw, base);
+    if (!isHttp(u)) return null;
+    u = unproxy(u);
+    const h = bareHost(u.hostname);
+    const p = u.pathname;
+    const source = u.href;
+    let m;
+
+    if (h === 'i.imgur.com' && /\.gifv$/i.test(p)) {
+      return [{ type: 'video', candidates: [u.href.replace(/\.gifv/i, '.mp4')], source }];
+    }
+    if (h === 'imgur.com' || h === 'm.imgur.com') {
+      if ((m = p.match(/^\/(?:a|gallery)\/(?:[^/]*-)?(\w{5,8})/))) return [{ type: 'embed', url: `https://imgur.com/a/${m[1]}/embed?pub=true`, source }];
+      if ((m = p.match(/^\/(\w{5,8})(?:\.\w+)?$/))) return [{ type: 'image', candidates: [`https://i.imgur.com/${m[1]}.jpg`], source }];
+    }
+
+    if (IMG_EXT.test(p)) return [{ type: 'image', candidates: uniq([stripChevereto(u.href), u.href]), thumb: u.href, source }];
+    if (VID_EXT.test(p)) return [{ type: 'video', candidates: [u.href], source }];
+
+    // the forum's own attachments
+    if (u.origin === location.origin) {
+      return /\/attachments\//.test(p) ? [{ type: 'image', candidates: [u.href], source, attachment: true }] : null;
+    }
+
+    const yt = youtubeId(u);
+    if (yt) return [{ type: 'embed', url: `https://www.youtube.com/embed/${yt}`, thumb: `https://i.ytimg.com/vi/${yt}/hqdefault.jpg`, source }];
+    if (h === 'streamable.com' && (m = p.match(/^\/(?:[eos]\/)?(\w{4,})/))) {
+      const id = m[1];
+      return deferred(source, () => resolveStreamable(id, source));
+    }
+    if (/redgifs\.com$/.test(h) && (m = p.match(/\/(?:watch|ifr|i)\/(\w+)/))) return [{ type: 'embed', url: `https://www.redgifs.com/ifr/${m[1]}`, source }];
+    if (h === 'vimeo.com' && (m = p.match(/^\/(\d+)/))) return [{ type: 'embed', url: `https://player.vimeo.com/video/${m[1]}`, source }];
+    if (h === 'player.vimeo.com') return [{ type: 'embed', url: u.href, source }];
+    if (/tiktok\.com$/.test(h) && (m = p.match(/\/video\/(\d+)/))) return [{ type: 'embed', url: `https://www.tiktok.com/embed/v2/${m[1]}`, source }];
+
+    if (hostListed(h)) return deferred(source, () => resolveViewerPage(u.href));
+    return null;
+  }
+
+  // Cheap check used to drop link text of media links from the post caption
+  function isMediaHref(raw) {
+    const u = unproxy(abs(raw || ''));
+    if (!isHttp(u)) return false;
+    const h = bareHost(u.hostname);
+    return IMG_EXT.test(u.pathname) || VID_EXT.test(u.pathname) ||
+      (u.origin === location.origin && /\/attachments\//.test(u.pathname)) ||
+      !!youtubeId(u) || /(^|\.)(imgur|streamable|redgifs|vimeo|tiktok)\.com$/.test(h) || hostListed(h);
+  }
+
+  async function resolveStreamable(id, source) {
+    try {
+      const { status, data } = await gmJSON(`https://api.streamable.com/videos/${id}`);
+      if (status === 404) return 'DEAD';
+      const file = data && data.files && (data.files.mp4 || data.files['mp4-mobile']);
+      const fix = (x) => (x && x.startsWith('//') ? 'https:' + x : x);
+      if (file && file.url) return [{ type: 'video', candidates: [fix(file.url)], thumb: fix(data.thumbnail_url), source }];
+    } catch (e) { /* fall back to the embedded player */ }
+    return [{ type: 'embed', url: `https://streamable.com/e/${id}`, source }];
+  }
+
+  function cheveretoAlbumItems(doc, base) {
+    const out = [];
+    doc.querySelectorAll('.list-item[data-object], .list-item[data-type="image"]').forEach((li) => {
+      let url = null;
+      const obj = li.getAttribute('data-object');
+      if (obj) {
+        try {
+          const o = JSON.parse(decodeURIComponent(obj));
+          url = (o.image && o.image.url) || o.url || o.display_url;
+        } catch (e) { /* malformed data-object */ }
+      }
+      if (!url) {
+        const img = li.querySelector('img');
+        if (img) url = stripChevereto(img.getAttribute('src'));
+      }
+      const x = url && abs(url, base);
+      if (x) out.push({ type: VID_EXT.test(x.pathname) ? 'video' : 'image', candidates: [x.href], source: base });
+    });
+    return out;
+  }
+
+  async function resolveViewerPage(href) {
+    let r;
+    try { r = await gmGet(href); } catch (e) { return 'DEAD'; }
+    if (r.status >= 400) return 'DEAD';
+    const final = r.finalUrl || href;
+    const doc = parseHTML(r.response);
+
+    // Chevereto album (anh.moe, ibb.co…): collect every image, following up to 20 "next" pages
+    let list = cheveretoAlbumItems(doc, final);
+    if (list.length > 1 || /\/(album|a)\//.test(abs(final).pathname)) {
+      let next = doc.querySelector('a[data-pagination="next"][href]');
+      for (let i = 0; next && i < 20; i++) {
+        try {
+          const page = parseHTML((await gmGet(abs(next.getAttribute('href'), final).href)).response);
+          list = list.concat(cheveretoAlbumItems(page, final));
+          next = page.querySelector('a[data-pagination="next"][href]');
+        } catch (e) { break; }
+      }
+      if (list.length) return list;
+    }
+
+    const ogImg = metaContent(doc, 'og:image:secure_url', 'og:image', 'twitter:image', 'twitter:image:src');
+    const thumb = ogImg ? abs(ogImg, final).href : undefined;
+
+    const ogVid = metaContent(doc, 'og:video:secure_url', 'og:video:url', 'og:video', 'twitter:player:stream');
+    if (ogVid) {
+      const vu = abs(ogVid, final);
+      const vt = metaContent(doc, 'og:video:type') || '';
+      if (vu && (VID_EXT.test(vu.pathname) || /^video\//.test(vt))) return [{ type: 'video', candidates: [vu.href], thumb, source: href }];
+      if (vu) return [{ type: 'embed', url: vu.href, thumb, source: href }];
+    }
+    const vid = doc.querySelector('video[src], video source[src]');
+    if (vid) return [{ type: 'video', candidates: [abs(vid.getAttribute('src'), final).href], thumb, source: href }];
+
+    const imgEl = doc.querySelector('#image-viewer-container img, img#image, #image-viewer img, .image-viewer img');
+    const imgUrl = ogImg || (doc.querySelector('link[rel="image_src"]') || {}).href || (imgEl && imgEl.getAttribute('src'));
+    if (imgUrl) {
+      const iu = abs(imgUrl, final).href;
+      return [{ type: 'image', candidates: uniq([iu, stripChevereto(iu)]), source: href }];
+    }
+    return 'DEAD';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reading thread pages
+  // ---------------------------------------------------------------------------
+  function getPosts(doc) {
+    const posts = doc.querySelectorAll('article.message--post');
+    return [...(posts.length ? posts : doc.querySelectorAll('article.message, li.message'))];
+  }
+
+  function postIdOf(post) {
+    const m = (post.getAttribute('data-content') || post.id || '').match(/post-(\d+)/);
+    return m ? m[1] : null;
+  }
+
+  function getTotalPages(doc) {
+    let max = 1;
+    doc.querySelectorAll('.pageNav a, .PageNav a, .pageNavSimple a').forEach((a) => {
+      max = Math.max(max, parseInt(a.textContent.trim(), 10) || 0);
+      const m = (a.getAttribute('href') || '').match(/page-(\d+)/);
+      if (m) max = Math.max(max, +m[1]);
+    });
+    const xf1 = doc.querySelector('.PageNav[data-last]');
+    if (xf1) max = Math.max(max, parseInt(xf1.getAttribute('data-last'), 10) || 1);
+    const jump = doc.querySelector('.js-pageJumpPage[max], input[name="page"][max]');
+    if (jump) max = Math.max(max, parseInt(jump.getAttribute('max'), 10) || 1);
+    return max;
+  }
+
+  function currentPage() {
+    const m = location.href.split('#')[0].match(/page-(\d+)/);
+    return m ? +m[1] : 1;
+  }
+
+  function makePageUrl() {
+    const link = document.querySelector('.pageNav a[href*="page-"], .PageNav a[href*="page-"], .pageNavSimple a[href*="page-"]');
+    if (link) {
+      const tpl = abs(link.getAttribute('href')).href.split('#')[0];
+      return (n) => (n === 1 ? tpl.replace(/page-\d+\/?/, '') : tpl.replace(/page-\d+/, 'page-' + n));
+    }
+    const canon = document.querySelector('link[rel="canonical"]');
+    let base = ((canon && canon.href) || location.href.split('#')[0]).replace(/page-\d+\/?$/, '');
+    if (!base.endsWith('/')) base += '/';
+    return (n) => (n === 1 ? base : base + 'page-' + n);
+  }
+
+  async function fetchDoc(url) {
+    for (let i = 0; i < 4; i++) {
+      const r = await fetch(url, { credentials: 'include' });
+      if (r.ok) return parseHTML(await r.text());
+      if (r.status !== 429 && r.status < 500) throw new Error('HTTP ' + r.status);
+      await sleep(2500 * (i + 1)); // rate limited / server error: back off and retry
+    }
+    throw new Error('too many retries');
+  }
+
+  // iframe URL, including lazy embeds from s9e MediaSites and XenForo
+  function iframeSrc(node) {
+    for (const name of ['src', 'data-src', 'data-s9e-mediaembed-src']) {
+      const v = node.getAttribute(name);
+      if (v && !/^about:/.test(v)) return v;
+    }
+    const json = node.getAttribute('data-s9e-mediaembed-iframe');
+    if (json) {
+      try {
+        const arr = JSON.parse(json);
+        const i = arr.indexOf('src');
+        if (i >= 0) return arr[i + 1];
+      } catch (e) { /* malformed attribute */ }
+    }
+    return null;
+  }
+
+  const MEDIA_SITES = {
+    youtube: (k) => `https://www.youtube.com/watch?v=${k}`,
+    vimeo: (k) => `https://vimeo.com/${k}`,
+    streamable: (k) => `https://streamable.com/${k}`,
+    imgur: (k) => `https://imgur.com/${k}`,
+    redgifs: (k) => `https://www.redgifs.com/watch/${k}`,
+    tiktok: (k) => `https://www.tiktok.com/video/${k}`,
+  };
+
+  // Media of one post, in document order. Each unit is spec[] or a Promise (see resolveLink).
+  function extractPost(post, base) {
+    const roots = [post.querySelector(BODY_SEL), post.querySelector('.message-attachments, .attachedFiles')].filter(Boolean);
+    const units = [];
+    const consumed = new Set();
+    const push = (res) => { if (res) units.push(res); };
+    const SEL = 'img, video, iframe, a[href], blockquote.imgur-embed-pub, [data-media-site-id][data-media-key], [data-s9e-mediaembed-iframe]';
+
+    for (const root of roots) {
+      for (const node of root.querySelectorAll(SEL)) {
+        if (consumed.has(node) || node.closest('.bbCodeBlock-sourceJump, .avatar, .username, .contentRow-figure')) continue;
+        const tag = node.tagName;
+
+        if (tag === 'IMG') {
+          if (node.matches('.smilie, .emoji, [data-smilie]') || node.closest('.bbCodeBlock--unfurl')) continue;
+          const w = parseInt(node.getAttribute('width'), 10), h = parseInt(node.getAttribute('height'), 10);
+          if ((w && w < 40) || (h && h < 40)) continue; // smilies / icons
+          const shown = node.getAttribute('data-src') || node.getAttribute('src');
+          const wrap = node.closest('[data-src]');
+          const orig = node.getAttribute('data-url') || (wrap && wrap !== node ? wrap.getAttribute('data-src') : null);
+          const shownU = shown && !shown.startsWith('data:') ? abs(shown, base) : null;
+          const origU = orig ? abs(orig, base) : null;
+          if (!shownU && !origU) continue;
+          const cands = [];
+          const a = node.closest('a[href]');
+          if (a && root.contains(a)) {
+            consumed.add(a);
+            const ah = abs(a.getAttribute('href'), base);
+            if (ah && (IMG_EXT.test(unproxy(ah).pathname) || (ah.origin === location.origin && /\/attachments\//.test(ah.pathname)))) cands.push(ah.href);
+          }
+          if (origU) cands.push(stripChevereto(origU.href));
+          if (shownU) cands.push(stripChevereto(unproxy(new URL(shownU.href)).href), shownU.href); // proxied copy may survive a dead original
+          if (origU) cands.push(origU.href);
+          units.push([{ type: 'image', candidates: uniq(cands), thumb: shownU ? shownU.href : undefined, source: (origU || shownU).href }]);
+        } else if (tag === 'VIDEO') {
+          const srcs = [node.getAttribute('src'), node.getAttribute('data-src')];
+          node.querySelectorAll('source').forEach((s) => srcs.push(s.getAttribute('src'), s.getAttribute('data-src')));
+          const cands = uniq(srcs).map((s) => abs(s, base)).filter(Boolean).map((x) => x.href);
+          if (!cands.length) continue;
+          const poster = node.getAttribute('poster') || node.getAttribute('data-poster');
+          units.push([{ type: 'video', candidates: cands, thumb: poster ? abs(poster, base).href : undefined, source: cands[0] }]);
+        } else if (tag === 'IFRAME' || node.hasAttribute('data-s9e-mediaembed-iframe')) {
+          const s = iframeSrc(node);
+          if (!s) continue;
+          node.querySelectorAll('iframe').forEach((f) => consumed.add(f));
+          const res = resolveLink(s, base);
+          const x = abs(s, base);
+          push(res || (x && [{ type: 'embed', url: x.href, source: x.href }]));
+        } else if (node.hasAttribute('data-media-site-id')) {
+          node.querySelectorAll('iframe, a, img, video').forEach((c) => consumed.add(c));
+          const inner = node.querySelector('iframe');
+          const site = MEDIA_SITES[node.getAttribute('data-media-site-id')];
+          const url = (inner && iframeSrc(inner)) || (site && site(node.getAttribute('data-media-key')));
+          if (url) push(resolveLink(url, base));
+        } else if (tag === 'BLOCKQUOTE') {
+          node.querySelectorAll('a').forEach((c) => consumed.add(c));
+          const id = node.getAttribute('data-id');
+          if (id) push(resolveLink('https://imgur.com/' + id, base));
+        } else if (tag === 'A' && !node.querySelector('img, video')) { // linked images are handled via the <img>
+          const href = node.getAttribute('href');
+          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) push(resolveLink(href, base));
+        }
+      }
+    }
+    return units;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Poster info (for the Reels-style label)
+  // ---------------------------------------------------------------------------
+  function detectThreadStarter(doc) {
+    const n = doc.querySelector('.p-description .username, .p-description a[href*="members/"], #pageDescription .username, #pageDescription a[href*="members/"]');
+    return n ? n.textContent.trim() : null;
+  }
+
+  function postText(post) {
+    const body = post.querySelector(BODY_SEL);
+    if (!body) return '';
+    const c = body.cloneNode(true);
+    c.querySelectorAll('.bbCodeBlock--quote, blockquote, script, style, img, video, iframe, .bbMediaWrapper, .bbMediaJustifier, ' +
+      '[data-s9e-mediaembed], [data-media-site-id], .bbCodeBlock--unfurl, .bbCodeSpoiler-button, .messageTextEndMarker').forEach((n) => n.remove());
+    c.querySelectorAll('a').forEach((a) => {
+      const txt = a.textContent.trim();
+      if (!txt || /^(https?:\/\/|www\.)/i.test(txt) || isMediaHref(a.getAttribute('href'))) a.remove();
+    });
+    c.querySelectorAll('br').forEach((b) => b.replaceWith('\n'));
+    c.querySelectorAll('div, p, li, h1, h2, h3, h4').forEach((d) => d.append('\n'));
+    return c.textContent.replace(/[ \t ]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{2,}/g, '\n').trim().slice(0, 2000);
+  }
+
+  function postMeta(post, base) {
+    const nameEl = post.querySelector('.message-name .username, .message-cell--user .username, .message-userDetails .username, .messageUserInfo .username, .userText .username');
+    const avImg = post.querySelector('.message-avatar img, .message-cell--user .avatar img, .messageUserBlock .avatar img, .message-user .avatar img');
+    const avSrc = avImg && (avImg.getAttribute('src') || avImg.getAttribute('data-src'));
+    const avatar = avSrc && !avSrc.startsWith('data:') ? abs(avSrc, base) : null;
+    const profLink = nameEl && nameEl.closest('a[href]');
+    const profile = profLink ? abs(profLink.getAttribute('href'), base) : null;
+    const dateEl = post.querySelector('.message-attribution-main time, .message-attribution time, .messageMeta .DateTime, .privateControls .DateTime');
+    return {
+      author: post.getAttribute('data-author') || (nameEl ? nameEl.textContent.trim() : ''),
+      avatar: avatar ? avatar.href : null,
+      profile: profile ? profile.href : null,
+      date: dateEl ? dateEl.textContent.trim() : '',
+      text: postText(post),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
+  const S = {
+    items: [],               // ready items, sorted by position in the thread
+    keys: new Set(),         // de-duplication keys
+    pending: 0,              // external links still resolving
+    pagesDone: 0,
+    totalPages: 1,
+    pageErrors: 0,
+    started: false,
+    stopped: false,
+    view: store.get('view', 'viewer'),         // viewer | grid | list
+    showDead: false,
+    showLabel: store.get('showLabel', true),
+    labelImages: store.get('labelImages', false),
+    muted: store.get('muted', false),
+    threadStarter: null,
+    starterFromHeader: false,
+    cur: null,               // item shown in the viewer
+    userMoved: false,        // user navigated, so stop auto-jumping to earlier items
+    lastDir: 1,
+    slideshow: false,
+    slideTimer: null,
+    unwireVideo: null,
+    videoCtl: null,
+  };
+  let ui = null;
+
+  const CSS = `
+.xtg-i{display:block;flex:0 0 auto}
+#xtg-fab{position:fixed;right:16px;bottom:16px;z-index:2147483000;padding:10px 16px;display:inline-flex;align-items:center;gap:7px;border:0;border-radius:999px;
+  background:#1f6feb;color:#fff;font:600 14px/1 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer}
+#xtg-fab:hover{background:#2b7bff}
+#xtg-root{position:fixed;inset:0;z-index:2147483001;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,9,11,.8);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  font:14px/1.4 system-ui,sans-serif;color:#e8e8ea;opacity:0;transition:opacity .18s}
+#xtg-root.xtg-open{opacity:1}
+#xtg-root[hidden]{display:none}
+#xtg-root *{box-sizing:border-box}
+.xtg-modal{position:relative;width:min(1500px,calc(100vw - 48px));height:calc(100vh - 48px);background:#121317;border-radius:12px;
+  box-shadow:0 24px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden;transform:scale(.97);transition:transform .18s}
+.xtg-open .xtg-modal{transform:none}
+.xtg-top{display:flex;align-items:center;gap:4px;padding:7px 8px 7px 16px;border-bottom:1px solid #24262c;flex-wrap:wrap}
+.xtg-counter{font-weight:600;min-width:60px;font-variant-numeric:tabular-nums}
+.xtg-status{color:#8b9097;font-size:12.5px;margin-left:6px}
+.xtg-grow{flex:1}
+.xtg-ib{height:32px;min-width:32px;padding:0 9px;border:0;border-radius:7px;background:transparent;color:#d6d9de;
+  font:13px system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;text-decoration:none;white-space:nowrap}
+.xtg-ib:hover{background:#25282e;color:#fff}
+.xtg-ib.on{background:#1f6feb;color:#fff}
+.xtg-ib[hidden]{display:none}
+.xtg-seg{display:inline-flex;background:#1b1d22;border-radius:8px;padding:2px;margin:0 4px}
+.xtg-seg .xtg-ib{height:28px}
+.xtg-menu{position:absolute;right:8px;top:46px;z-index:5;background:#1b1d22;border:1px solid #2c2f36;border-radius:10px;padding:6px;
+  box-shadow:0 10px 30px rgba(0,0,0,.5);min-width:260px}
+.xtg-menu[hidden]{display:none}
+.xtg-menu label,.xtg-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:0;border-radius:6px;background:none;
+  color:#e0e3e7;font:13px system-ui,sans-serif;text-align:left;cursor:pointer}
+.xtg-menu label:hover,.xtg-menu button:hover{background:#262930}
+.xtg-body{flex:1;min-height:0;position:relative}
+.xtg-viewer{position:absolute;inset:0;display:flex;flex-direction:column}
+.xtg-viewer[hidden],.xtg-scroll[hidden]{display:none}
+.xtg-stage{flex:1;min-height:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  user-select:none;-webkit-user-select:none;touch-action:none}
+.xtg-stage>img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;transition:transform .2s;will-change:transform}
+.xtg-stage>img.zoomed{cursor:grab}
+.xtg-stage>img.dragging{cursor:grabbing;transition:none}
+.xtg-stage>video{max-width:100%;max-height:100%;background:#000;cursor:pointer}
+.xtg-stage>iframe{width:min(100%,calc((100vh - 200px)*16/9));aspect-ratio:16/9;max-height:100%;border:0;background:#000}
+.xtg-msg{color:#8b9097;text-align:center;padding:20px;line-height:1.8}
+.xtg-msg a{color:#8fb8ff}
+.xtg-nav{display:flex;align-items:center;justify-content:center;position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;
+  border-radius:999px;border:0;background:rgba(30,32,36,.72);color:#fff;cursor:pointer;z-index:4}
+.xtg-nav:hover{background:rgba(60,63,70,.92)}
+.xtg-prev{left:12px}.xtg-next{right:12px}
+.xtg-strip{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;border-top:1px solid #24262c;background:#0f1013;
+  scrollbar-width:thin;scrollbar-color:#3a3d44 transparent;min-height:72px}
+.xtg-th{flex:0 0 auto;width:72px;height:54px;border-radius:5px;overflow:hidden;cursor:pointer;position:relative;opacity:.5;
+  outline:2px solid transparent;outline-offset:-2px;background:#1b1d21}
+.xtg-th:hover{opacity:.85}
+.xtg-th.on{opacity:1;outline-color:#1f6feb}
+.xtg-th img,.xtg-th video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.xtg-th span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 3px #000}
+.xtg-scroll{position:absolute;inset:0;overflow:auto;scrollbar-color:#3a3d44 transparent;padding:12px 14px 30px}
+.xtg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px}
+.xtg-tile{position:relative;aspect-ratio:1;background:#1b1d21;border-radius:5px;overflow:hidden;cursor:pointer}
+.xtg-tile img,.xtg-tile video{width:100%;height:100%;object-fit:cover;display:block}
+.xtg-badge{display:inline-flex;align-items:center;gap:4px;position:absolute;top:6px;left:6px;background:rgba(0,0,0,.7);color:#fff;
+  border-radius:4px;padding:2px 6px;font-size:12px;pointer-events:none}
+.xtg-ph{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  background:linear-gradient(135deg,#23262c,#1a1c20);color:#aeb3ba;font-size:13px;text-align:center;padding:8px;word-break:break-all}
+.xtg-ph .xtg-i{color:#fff;opacity:.9}
+.xtg-dead .xtg-ph{color:#c98a8a}
+.xtg-dead .xtg-ph .xtg-i,.xtg-msg .xtg-i{color:#c98a8a;margin:0 auto 6px}
+.xtg-cap{position:absolute;bottom:0;left:0;right:0;padding:3px 6px;font-size:11px;color:#ddd;
+  background:linear-gradient(transparent,rgba(0,0,0,.75));opacity:0;transition:opacity .15s}
+.xtg-cap a{color:#8fb8ff;margin-left:10px;text-decoration:none}
+.xtg-tile:hover .xtg-cap{opacity:1}
+.xtg-hide-dead .xtg-dead{display:none}
+.xtg-grid.xtg-list{display:flex;flex-direction:column;align-items:center;gap:14px}
+.xtg-list .xtg-tile{aspect-ratio:auto;width:100%;max-width:960px;cursor:default;background:none}
+.xtg-list .xtg-tile img{height:auto;object-fit:contain;cursor:zoom-in;min-height:60px;background:#1b1d21}
+.xtg-list .xtg-tile video{height:auto;max-height:80vh;object-fit:contain;background:#000}
+.xtg-list .xtg-tile iframe{width:100%;aspect-ratio:16/9;border:0;background:#000;display:block}
+.xtg-list .xtg-cap{position:static;opacity:1;background:none;color:#8b9097;padding:4px 0 0}
+.xtg-list .xtg-dead .xtg-ph{height:70px}
+.xtg-empty{color:#8b9097;text-align:center;padding:60px 0}
+.xtg-toast{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);background:#2a2d33;color:#fff;padding:8px 14px;
+  border-radius:8px;font-size:13px;z-index:6}
+
+/* poster info + Reels-style controls */
+.xtg-reel{position:absolute;z-index:3;pointer-events:none;padding:40px 14px 12px;color:#fff;transition:opacity .2s;
+  background:linear-gradient(transparent,rgba(0,0,0,.14) 40%,rgba(0,0,0,.4));text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.45)}
+.xtg-reel a,.xtg-reel button{pointer-events:auto}
+.xtg-reel-vid{padding-bottom:0;background:linear-gradient(transparent 70%,rgba(0,0,0,.14));transition:background .25s}
+.xtg-show .xtg-reel-vid{background:linear-gradient(transparent,rgba(0,0,0,.14) 40%,rgba(0,0,0,.4))}
+.xtg-reel-info,.xtg-vrow{transition:opacity .25s}
+.xtg-reel-vid .xtg-reel-info,.xtg-reel-vid .xtg-vrow{opacity:0}
+.xtg-show .xtg-reel-vid .xtg-reel-info,.xtg-show .xtg-reel-vid .xtg-vrow{opacity:1}
+.xtg-stage:not(.xtg-show) .xtg-reel-vid *{pointer-events:none}
+.xtg-stage.zoomed .xtg-reel,.xtg-stage.zoomed .xtg-corner{opacity:0;visibility:hidden}
+.xtg-corner{position:absolute;z-index:3;pointer-events:none;top:10px;left:10px;transition:opacity .2s}
+.xtg-corner .xtg-tag{display:inline-block;font-size:12px;padding:4px 10px;background:rgba(0,0,0,.55);
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.xtg-corner .xtg-tag-op{background:#1f6feb}
+.xtg-vbar{pointer-events:auto;margin:4px -10px 0}
+.xtg-vrow{display:flex;align-items:center;gap:2px;height:34px}
+.xtg-vb{width:34px;height:32px;border:0;border-radius:6px;background:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.xtg-vb:hover{background:rgba(255,255,255,.16)}
+.xtg-time{font-size:12px;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.9);margin-left:4px;white-space:nowrap}
+.xtg-prog{height:14px;display:flex;align-items:center;cursor:pointer;touch-action:none;padding:0 8px}
+.xtg-track{position:relative;flex:1;height:3px;background:rgba(255,255,255,.25);border-radius:2px;transition:height .15s}
+.xtg-prog:hover .xtg-track,.xtg-prog.seeking .xtg-track{height:5px}
+.xtg-buf,.xtg-played{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:2px}
+.xtg-buf{background:rgba(255,255,255,.35)}
+.xtg-played{background:#fff}
+.xtg-played::after{content:'';position:absolute;right:-6px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;
+  transform:scale(0);transition:transform .15s}
+.xtg-show .xtg-prog:hover .xtg-played::after,.xtg-show .xtg-prog.seeking .xtg-played::after{transform:scale(1)}
+.xtg-bigplay{position:absolute;left:50%;top:50%;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;background:rgba(0,0,0,.5);
+  color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .2s;z-index:2}
+.xtg-paused .xtg-bigplay{opacity:1}
+.xtg-embed{display:flex;flex-direction:column;width:min(100%,calc((100vh - 360px)*16/9));min-width:min(100%,420px);max-height:100%}
+.xtg-embed iframe{width:100%;aspect-ratio:16/9;border:0;background:#000;flex:0 1 auto;min-height:0}
+.xtg-embed .xtg-post{max-width:none;border-radius:0 0 8px 8px;flex:0 0 auto}
+.xtg-embed .xtg-expanded .xtg-text{max-height:22vh}
+.xtg-who{display:flex;align-items:center;gap:10px;min-width:0}
+.xtg-av{width:36px;height:36px;border-radius:50%;object-fit:cover;flex:0 0 auto;border:2px solid rgba(255,255,255,.85);background:#333}
+.xtg-av-txt{display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#fff;text-shadow:none}
+.xtg-line{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-width:0}
+.xtg-name{font-weight:700;font-size:15px;color:#fff !important;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+a.xtg-name:hover{text-decoration:underline}
+.xtg-tag{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.2);color:#fff;text-shadow:none;white-space:nowrap}
+.xtg-tag-op{background:#1f6feb}
+.xtg-date{font-size:12px;color:rgba(255,255,255,.75)}
+.xtg-text{margin-top:8px;font-size:14px;line-height:1.45;white-space:pre-line;word-break:break-word;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.xtg-expanded .xtg-text{display:block;-webkit-line-clamp:unset;max-height:40vh;overflow:auto;pointer-events:auto}
+.xtg-more{margin-top:2px;padding:0;border:0;background:none;color:rgba(255,255,255,.85);font:600 13px system-ui,sans-serif;cursor:pointer}
+.xtg-more:hover{color:#fff;text-decoration:underline}
+.xtg-post{width:100%;max-width:960px;padding:10px 12px;background:#1a1c21;border-radius:8px 8px 0 0;color:#e8e8ea}
+.xtg-post .xtg-av{border-color:#3a3d44}
+.xtg-post .xtg-text{text-shadow:none}
+@media (max-width:700px){
+  .xtg-modal{width:100vw;height:100vh;height:100dvh;border-radius:0}
+  .xtg-grid{grid-template-columns:repeat(auto-fill,minmax(105px,1fr))}
+  .xtg-nav{display:none}
+  .xtg-lbl{display:none}
+}`;
+
+  // ---------------------------------------------------------------------------
+  // Modal
+  // ---------------------------------------------------------------------------
+  function buildUI() {
+    const root = el('div', { id: 'xtg-root', hidden: true });
+    const btn = (attrs, icon, label, tip) =>
+      `<button class="xtg-ib" ${attrs} title="${esc(tip)}">${icon}${label ? `<span class="xtg-lbl">${esc(label)}</span>` : ''}</button>`;
+    root.innerHTML = `
+      <div class="xtg-modal" role="dialog" aria-label="${esc(tr('dialog'))}">
+        <div class="xtg-top">
+          <span class="xtg-counter">0 / 0</span>
+          <span class="xtg-status"></span>
+          <span class="xtg-grow"></span>
+          ${btn('data-act="play"', `<span class="xtg-pi">${ic('play', 16, true)}</span>`, tr('slideshow'), tr('slideshowTip'))}
+          <a class="xtg-ib" data-act="post" target="_blank" rel="noopener" title="${esc(tr('postTip'))}">${ic('ext', 15)}<span class="xtg-lbl">${esc(tr('post'))}</span></a>
+          <a class="xtg-ib" data-act="src" target="_blank" rel="noopener noreferrer" title="${esc(tr('sourceTip'))}">${ic('ext', 15)}<span class="xtg-lbl">${esc(tr('source'))}</span></a>
+          <span class="xtg-seg">
+            ${btn('data-view="viewer"', ic('image', 16), tr('view'), tr('viewTip'))}
+            ${btn('data-view="grid"', ic('grid', 16), tr('grid'), tr('gridTip'))}
+            ${btn('data-view="list"', ic('rows', 16), tr('scroll'), tr('scrollTip'))}
+          </span>
+          ${btn('data-act="stop"', ic('stop', 16), tr('stop'), tr('stopTip'))}
+          ${btn('data-act="menu"', ic('settings'), '', tr('options'))}
+          ${btn('data-act="close"', ic('x', 20), '', tr('close'))}
+        </div>
+        <div class="xtg-menu" hidden>
+          <label><input type="checkbox" data-opt="label"> ${esc(tr('optLabel'))}</label>
+          <label><input type="checkbox" data-opt="labelImages"> ${esc(tr('optLabelImg'))}</label>
+          <label><input type="checkbox" data-opt="dead"> ${esc(tr('optDead'))}</label>
+          <button data-act="hosts">${esc(tr('optHosts'))}</button>
+        </div>
+        <div class="xtg-body">
+          <div class="xtg-viewer">
+            <div class="xtg-stage"></div>
+            <button class="xtg-nav xtg-prev" title="${esc(tr('prev'))}">${ic('left', 26)}</button>
+            <button class="xtg-nav xtg-next" title="${esc(tr('next'))}">${ic('right', 26)}</button>
+            <div class="xtg-strip"></div>
+          </div>
+          <div class="xtg-scroll" hidden>
+            <div class="xtg-grid xtg-hide-dead"></div>
+            <div class="xtg-empty"></div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(root);
+    const q = (s) => root.querySelector(s);
+    ui = {
+      root, modal: q('.xtg-modal'), counter: q('.xtg-counter'), status: q('.xtg-status'),
+      playBtn: q('[data-act="play"]'), postLink: q('[data-act="post"]'), srcLink: q('[data-act="src"]'),
+      stopBtn: q('[data-act="stop"]'), menu: q('.xtg-menu'),
+      viewer: q('.xtg-viewer'), stage: q('.xtg-stage'), strip: q('.xtg-strip'),
+      scroll: q('.xtg-scroll'), grid: q('.xtg-grid'), empty: q('.xtg-empty'),
+    };
+
+    root.addEventListener('click', (e) => {
+      const more = e.target.closest('.xtg-more');
+      if (more) {
+        const box = more.parentElement;
+        more.textContent = box.classList.toggle('xtg-expanded') ? tr('less') : tr('more');
+        e.stopPropagation();
+        return;
+      }
+      if (e.target === root) { closeGallery(); return; } // click on the backdrop
+      if (!e.target.closest('.xtg-menu, [data-act="menu"]')) ui.menu.hidden = true;
+      const viewBtn = e.target.closest('[data-view]');
+      if (viewBtn) { setView(viewBtn.getAttribute('data-view')); return; }
+      const act = e.target.closest('[data-act]');
+      switch (act && act.getAttribute('data-act')) {
+        case 'close': closeGallery(); break;
+        case 'stop': S.stopped = true; scheduleStatus(); break;
+        case 'play': toggleSlideshow(); break;
+        case 'menu': ui.menu.hidden = !ui.menu.hidden; break;
+        case 'hosts': ui.menu.hidden = true; editHosts(); break;
+        default: break;
+      }
+    });
+
+    const opt = (name) => q(`[data-opt="${name}"]`);
+    opt('label').checked = S.showLabel;
+    opt('labelImages').checked = S.labelImages;
+    opt('label').addEventListener('change', (e) => setShowLabel(e.target.checked));
+    opt('labelImages').addEventListener('change', (e) => {
+      S.labelImages = e.target.checked;
+      store.set('labelImages', S.labelImages);
+      refreshLabels();
+    });
+    opt('dead').addEventListener('change', (e) => {
+      S.showDead = e.target.checked;
+      ui.grid.classList.toggle('xtg-hide-dead', !S.showDead);
+    });
+    q('.xtg-prev').onclick = () => step(-1, true);
+    q('.xtg-next').onclick = () => step(1, true);
+    new ResizeObserver(positionOverlay).observe(ui.stage);
+    setupStageGestures();
+    document.addEventListener('keydown', onKey, true);
+    applyView();
+  }
+
+  function onKey(e) {
+    if (!ui || ui.root.hidden || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (k === 'Escape') {
+      if (!ui.menu.hidden) ui.menu.hidden = true; else closeGallery();
+      e.preventDefault();
+      return;
+    }
+    if (S.view === 'viewer' && S.videoCtl) {
+      if (k === 'k') { S.videoCtl.toggle(); return; }
+      if (k === 'm') { S.videoCtl.mute(); return; }
+      if (k === 'f') { toggleFullscreen(); return; }
+    }
+    if (k === 'i') { setShowLabel(!S.showLabel); return; }
+    if (k === 'g') { setView(S.view === 'grid' ? 'viewer' : 'grid'); return; }
+    if (S.view !== 'viewer') return;
+    if (k === 'ArrowRight') { step(1, true); e.preventDefault(); }
+    else if (k === 'ArrowLeft') { step(-1, true); e.preventDefault(); }
+    else if (k === ' ') { toggleSlideshow(); e.preventDefault(); }
+  }
+
+  function editHosts() {
+    const v = prompt(tr('hostsPrompt'), hosts.join(', '));
+    if (v == null) return;
+    hosts = v.trim() ? v.split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_HOSTS.slice();
+    store.set('hosts', hosts);
+    if (ui && !ui.root.hidden) toast(tr('saved')); else alert(tr('saved'));
+  }
+
+  function toast(msg) {
+    const node = el('div', { className: 'xtg-toast', textContent: msg });
+    ui.modal.appendChild(node);
+    setTimeout(() => node.remove(), 3200);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Status bar (many changes in a row are batched into one update)
+  // ---------------------------------------------------------------------------
+  const liveItems = () => S.items.filter((i) => !i.dead);
+  const isLoading = () => !S.stopped && (S.pagesDone < S.totalPages || S.pending > 0);
+  let statusQueued = false;
+  function scheduleStatus() {
+    if (statusQueued || !ui) return;
+    statusQueued = true;
+    setTimeout(() => { statusQueued = false; renderStatus(); }, 16);
+  }
+
+  function renderStatus() {
+    const live = liveItems();
+    let images = 0;
+    for (const i of live) if (i.type === 'image') images++;
+    const dead = S.items.length - live.length;
+    const loading = isLoading();
+    let st = tr('counts', images, live.length - images);
+    if (dead) st += tr('broken', dead);
+    if (loading) st += tr('loadingPages', S.pagesDone, S.totalPages, S.pending);
+    else if (S.stopped && S.pagesDone < S.totalPages) st += tr('stopped', S.pagesDone, S.totalPages);
+    if (S.pageErrors) st += tr('pageErrors', S.pageErrors);
+    ui.status.textContent = st;
+    ui.stopBtn.hidden = !loading;
+    ui.counter.textContent = `${S.cur && !S.cur.dead ? live.indexOf(S.cur) + 1 : 0} / ${live.length}`;
+    const msg = loading ? tr('searching') : tr('none');
+    ui.empty.textContent = msg;
+    ui.empty.style.display = live.length ? 'none' : '';
+    if (!S.cur && S.view === 'viewer') ui.stage.innerHTML = `<div class="xtg-msg">${esc(live.length ? tr('loading') : msg)}</div>`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Items
+  // ---------------------------------------------------------------------------
+  function comparePos(a, b) {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const d = (a[i] || 0) - (b[i] || 0);
+      if (d) return d;
+    }
+    return 0;
+  }
+
+  function addItem(spec, pos, ctx) {
+    if (spec.type === 'dead') {
+      const k = 'dead:' + keyOf(spec.source);
+      if (S.keys.has(k)) return;
+      S.keys.add(k);
+    } else {
+      const k = keyOf(spec.type === 'embed' ? spec.url : spec.candidates[0]);
+      if (S.keys.has(k)) return;
+      S.keys.add(k);
+      (spec.candidates || []).slice(1).forEach((c) => S.keys.add(keyOf(c)));
+    }
+    const item = Object.assign({ candidates: [] }, spec, {
+      pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, dead: spec.type === 'dead',
+    });
+    if (item.dead) item.type = 'image';
+
+    // binary insert to keep thread order (async results arrive out of order)
+    let lo = 0, hi = S.items.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (comparePos(S.items[mid].pos, pos) < 0) lo = mid + 1; else hi = mid; }
+    S.items.splice(lo, 0, item);
+    const after = S.items.slice(lo + 1);
+
+    item.el = buildTile(item);
+    const nextTile = after.find((i) => i.el);
+    ui.grid.insertBefore(item.el, nextTile ? nextTile.el : null);
+    if (!item.dead) {
+      item.thumbEl = buildThumb(item);
+      const nextThumb = after.find((i) => i.thumbEl);
+      ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
+      if (item.type !== 'image' && !item.thumb) ensureThumb(item);
+      // show the first item, or an earlier one that arrived late, until the user navigates
+      if (!S.cur || (!S.userMoved && comparePos(pos, S.cur.pos) < 0)) showItem(item);
+    }
+    scheduleStatus();
+  }
+
+  function handleUnit(unit, pos, ctx) {
+    if (Array.isArray(unit)) { unit.forEach((spec, i) => addItem(spec, pos.concat(i), ctx)); return; }
+    const linkKey = 'link:' + keyOf(unit.source);
+    if (S.keys.has(linkKey)) return; // same link already being resolved (usually a quote)
+    S.keys.add(linkKey);
+    S.pending++;
+    scheduleStatus();
+    const done = (res) => {
+      if (Array.isArray(res) && res.length) res.forEach((spec, i) => addItem(spec, pos.concat(i), ctx));
+      else addItem({ type: 'dead', source: unit.source }, pos, ctx);
+    };
+    unit.then(done, () => done('DEAD')).finally(() => { S.pending--; scheduleStatus(); });
+  }
+
+  function processDoc(doc, page, pageUrl) {
+    getPosts(doc).forEach((post, pi) => {
+      const meta = postMeta(post, pageUrl);
+      if (page === 1 && pi === 0) setThreadStarter(meta.author, false);
+      const ctx = { page, postId: postIdOf(post), pageUrl, meta };
+      extractPost(post, pageUrl).forEach((unit, k) => handleUnit(unit, [page, pi, k], ctx));
+    });
+  }
+
+  function markDead(item) {
+    if (item.dead) return;
+    item.dead = true;
+    replaceTile(item);
+    if (item.thumbEl) { item.thumbEl.remove(); item.thumbEl = null; }
+    if (S.cur === item && !step(S.lastDir, false) && !step(-S.lastDir, false)) renderStage();
+    scheduleStatus();
+  }
+
+  const postUrl = (item) => item.pageUrl + (item.postId ? '#post-' + item.postId : '');
+
+  // ---------------------------------------------------------------------------
+  // Media loading with fallbacks
+  // ---------------------------------------------------------------------------
+  function isPlaceholder(img) {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    return w <= 1 || h <= 1 || (/imgur\.com/.test(img.src) && w === 161 && h === 81); // imgur "removed" image
+  }
+
+  // Try each URL; then download through the manager (hotlink protection); retry everything once
+  // after 2 s (flaky network) before declaring the item dead.
+  function loadImage(img, item, urls, onFail) {
+    let i = 0, blobTried = false, retried = false;
+    img.referrerPolicy = 'no-referrer';
+    img.decoding = 'async';
+    const giveUp = () => {
+      if (retried) { onFail(); return; }
+      retried = true;
+      setTimeout(() => { i = 0; tryNext(); }, 2000);
+    };
+    const tryNext = () => {
+      if (i < urls.length) { img.src = urls[i++]; return; }
+      if (!blobTried && !item.attachment && item.candidates.length) {
+        blobTried = true;
+        gmBlobUrl(item.candidates).then((b) => { item.working = b; img.src = b; }, giveUp);
+        return;
+      }
+      giveUp();
+    };
+    img.onerror = tryNext;
+    img.onload = () => {
+      if (isPlaceholder(img)) { tryNext(); return; }
+      if (!item.working && item.candidates.includes(img.src)) item.working = img.src;
+    };
+    tryNext();
+  }
+
+  // frag '#t=1' makes thumbnails show the frame at 1 s instead of the (often black) first frame
+  function loadVideo(v, item, onFail, frag = '') {
+    let i = 0;
+    const tryNext = () => { if (i < item.candidates.length) v.src = item.candidates[i++] + frag; else onFail(); };
+    v.onerror = tryNext;
+    tryNext();
+  }
+
+  function mediaEl(tag, props) {
+    const node = el(tag, props);
+    if (tag === 'video') node.playsInline = true;
+    return node;
+  }
+
+  function iframeEl(url, lazy) {
+    const f = el('iframe', { src: url, allowFullscreen: true });
+    if (lazy) f.loading = 'lazy';
+    f.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture; encrypted-media');
+    return f;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Grid / scroll tiles and filmstrip thumbnails
+  // ---------------------------------------------------------------------------
+  function buildTile(item) {
+    const t = el('div', { className: 'xtg-tile' });
+    const list = S.view === 'list';
+    const cap = el('div', { className: 'xtg-cap' });
+    cap.innerHTML = list
+      ? `${esc(tr('page', item.page))}<a href="${esc(postUrl(item))}" target="_blank" rel="noopener">${esc(tr('postLink'))}</a>` +
+        (item.source ? `<a href="${esc(item.source)}" target="_blank" rel="noopener noreferrer">${esc(tr('sourceLink'))}</a>` : '')
+      : esc(tr('page', item.page)) + (item.type !== 'image' && item.meta && item.meta.author ? ` · ${esc(item.meta.author)}` : '');
+    cap.querySelectorAll('a').forEach((a) => { a.onclick = (e) => e.stopPropagation(); });
+
+    if (item.dead) {
+      t.classList.add('xtg-dead');
+      t.innerHTML = `<div class="xtg-ph">${ic('dead', 30)}${esc(tr('dead'))}<span>${esc(hostOf(item.source))}</span></div>`;
+      t.appendChild(cap);
+      if (item.source) t.onclick = () => window.open(item.source, '_blank', 'noopener');
+      return t;
+    }
+    if (list && showsLabel(item)) t.appendChild(el('div', { className: 'xtg-post', innerHTML: posterHTML(item, true) }));
+
+    const fail = () => markDead(item);
+    const open = () => { S.userMoved = true; setView('viewer'); showItem(item); };
+
+    if (item.type === 'image') {
+      const img = el('img', { loading: 'lazy', alt: '' });
+      loadImage(img, item, uniq(list ? [item.working, ...item.candidates] : [item.working, item.thumb, ...item.candidates]), fail);
+      img.onclick = open;
+      t.appendChild(img);
+    } else if (list && item.type === 'video') {
+      const v = mediaEl('video', { controls: true, preload: 'metadata' });
+      if (item.thumb) v.poster = item.thumb;
+      loadVideo(v, item, fail);
+      t.appendChild(v);
+    } else if (list) {
+      t.appendChild(iframeEl(item.url, true));
+    } else {
+      if (item.thumb) {
+        const img = el('img', { loading: 'lazy', alt: '', referrerPolicy: 'no-referrer', src: item.thumb });
+        img.onerror = () => {
+          img.replaceWith(el('div', { className: 'xtg-ph', innerHTML: ic('play', 30, true) }));
+          ensureThumb(item, img.src);
+        };
+        t.appendChild(img);
+      } else if (item.type === 'video') {
+        const v = mediaEl('video', { muted: true, preload: 'metadata' });
+        loadVideo(v, item, fail, '#t=1');
+        t.appendChild(v);
+      } else {
+        t.innerHTML = `<div class="xtg-ph">${ic('play', 30, true)}${esc(hostOf(item.url))}</div>`;
+      }
+      const isVid = item.type === 'video';
+      t.insertAdjacentHTML('beforeend', `<span class="xtg-badge">${ic(isVid ? 'video' : 'play', 13, !isVid)}${esc(isVid ? tr('video') : hostOf(item.url))}</span>`);
+      t.onclick = open;
+    }
+    t.appendChild(cap);
+    return t;
+  }
+
+  function replaceTile(item) {
+    const fresh = buildTile(item);
+    item.el.replaceWith(fresh);
+    item.el = fresh;
+  }
+
+  function buildThumb(item) {
+    const th = el('div', { className: 'xtg-th', title: tr('page', item.page) });
+    if (item.type === 'image') {
+      const img = el('img', { loading: 'lazy', alt: '' });
+      loadImage(img, item, uniq([item.working, item.thumb, ...item.candidates]), () => markDead(item));
+      th.appendChild(img);
+    } else {
+      if (item.thumb) {
+        const img = el('img', { loading: 'lazy', alt: '', referrerPolicy: 'no-referrer', src: item.thumb });
+        img.onerror = () => { img.remove(); ensureThumb(item, img.src); };
+        th.appendChild(img);
+      } else if (item.type === 'video') {
+        const v = mediaEl('video', { muted: true, preload: 'metadata' });
+        loadVideo(v, item, () => v.remove(), '#t=1');
+        th.appendChild(v);
+      }
+      th.insertAdjacentHTML('beforeend', `<span>${ic('play', 18, true)}</span>`);
+    }
+    th.onclick = () => { S.userMoved = true; showItem(item); };
+    return th;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Thumbnails for videos / embeds that have none
+  // ---------------------------------------------------------------------------
+  let redgifsToken = null;
+
+  async function oembedThumb(endpoint) {
+    const { data } = await gmJSON(endpoint);
+    return (data && data.thumbnail_url) || null;
+  }
+
+  async function ogThumb(pageUrl) {
+    const r = await gmGet(pageUrl);
+    if (r.status >= 400) return null;
+    const c = metaContent(parseHTML(r.response), 'og:image:secure_url', 'og:image', 'twitter:image', 'twitter:image:src');
+    const x = c && abs(c, r.finalUrl || pageUrl);
+    return x ? x.href : null;
+  }
+
+  async function redgifsThumb(id) {
+    if (!redgifsToken) redgifsToken = (await gmJSON('https://api.redgifs.com/v2/auth/temporary')).data.token;
+    const { data } = await gmJSON(`https://api.redgifs.com/v2/gifs/${id.toLowerCase()}`, { Authorization: 'Bearer ' + redgifsToken });
+    const urls = (data && data.gif && data.gif.urls) || {};
+    return urls.poster || urls.thumbnail || null;
+  }
+
+  // Grab one frame as a JPEG (only works for same-origin videos or servers that allow CORS)
+  function captureFrame(url) {
+    return new Promise((resolve) => {
+      const x = abs(url);
+      if (!x) { resolve(null); return; }
+      const v = mediaEl('video', { muted: true, preload: 'auto' });
+      let done = false;
+      const finish = (res) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        v.removeAttribute('src');
+        try { v.load(); } catch (e) { /* ignore */ }
+        resolve(res);
+      };
+      const timer = setTimeout(() => finish(null), 15000);
+      if (x.origin !== location.origin) v.crossOrigin = 'anonymous';
+      v.onloadedmetadata = () => { v.currentTime = Math.min(1.5, (v.duration || 10) * 0.1); };
+      v.onseeked = () => {
+        try {
+          const w = Math.min(480, v.videoWidth || 480);
+          const c = el('canvas', { width: w, height: Math.round(((v.videoHeight || 270) * w) / (v.videoWidth || 480)) });
+          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+          finish(c.toDataURL('image/jpeg', 0.75));
+        } catch (e) { finish(null); } // tainted canvas (no CORS)
+      };
+      v.onerror = () => finish(null);
+      v.src = x.href;
+    });
+  }
+
+  const OEMBED = [
+    [/vimeo\.com\/(?:video\/)?(\d+)/, (id) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent('https://vimeo.com/' + id)}`],
+    [/streamable\.com\/(?:[eos]\/)?(\w{4,})/, (id) => `https://api.streamable.com/oembed.json?url=${encodeURIComponent('https://streamable.com/' + id)}`],
+    [/tiktok\.com\/(?:embed\/v2\/|.*\/video\/)(\d+)/, (id) => `https://www.tiktok.com/oembed?url=${encodeURIComponent('https://www.tiktok.com/video/' + id)}`],
+  ];
+
+  async function findThumb(item, failed) {
+    const text = [item.source, item.url].filter(Boolean).join(' ');
+    const ok = (x) => (x && x !== failed ? x : null);
+    let t, m;
+    try {
+      if (item.type === 'video') {
+        for (const c of item.candidates) if ((t = ok(await captureFrame(c)))) return t;
+      }
+      for (const [re, endpoint] of OEMBED) {
+        if ((m = text.match(re)) && (t = ok(await oembedThumb(endpoint(m[1]))))) return t;
+      }
+      if ((m = text.match(/redgifs\.com\/(?:watch|ifr|i)\/(\w+)/)) && (t = ok(await redgifsThumb(m[1])))) return t;
+      const u = abs(item.source || item.url || '');
+      if (isHttp(u) && u.origin !== location.origin && !VID_EXT.test(u.pathname) && (t = ok(await ogThumb(u.href)))) return t;
+    } catch (e) { /* nothing found */ }
+    return null;
+  }
+
+  function ensureThumb(item, failed) {
+    if (item.thumbBusy || (item.thumbTries || 0) >= 2) return;
+    item.thumbBusy = true;
+    item.thumbTries = (item.thumbTries || 0) + 1;
+    thumbQueue(() => findThumb(item, failed)).then((t) => {
+      if (t && t !== item.thumb && !item.dead) {
+        item.thumb = t;
+        replaceTile(item);
+        if (item.thumbEl) {
+          const fresh = buildThumb(item);
+          fresh.classList.toggle('on', item.thumbEl.classList.contains('on'));
+          item.thumbEl.replaceWith(fresh);
+          item.thumbEl = fresh;
+        }
+        const v = S.cur === item && ui.stage.querySelector(':scope > video');
+        if (v && !v.poster) v.poster = t;
+      }
+    }).finally(() => { item.thumbBusy = false; });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Poster label
+  // ---------------------------------------------------------------------------
+  const sameName = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+  const showsLabel = (item) => S.showLabel && !item.dead && !!(item.meta && item.meta.author) && (item.type !== 'image' || S.labelImages);
+
+  function nameColor(name) {
+    let h = 0;
+    for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return `hsl(${h},45%,42%)`;
+  }
+
+  function roleTagHTML(item) {
+    if (!S.threadStarter || !item.meta || !item.meta.author) return '';
+    const op = sameName(item.meta.author, S.threadStarter);
+    return `<span class="xtg-tag${op ? ' xtg-tag-op' : ''}">${esc(op ? tr('op') : tr('member'))}</span>`;
+  }
+
+  function posterHTML(item, withTag) {
+    const m = item.meta;
+    const avatar = m.avatar
+      ? `<img class="xtg-av" src="${esc(m.avatar)}" alt="" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">`
+      : `<span class="xtg-av xtg-av-txt" style="background:${nameColor(m.author)}">${esc([...m.author][0].toUpperCase())}</span>`;
+    const name = m.profile
+      ? `<a class="xtg-name" href="${esc(m.profile)}" target="_blank" rel="noopener">${esc(m.author)}</a>`
+      : `<span class="xtg-name">${esc(m.author)}</span>`;
+    const date = m.date ? `<span class="xtg-date">${esc(m.date)}</span>` : '';
+    const long = m.text && (m.text.length > 110 || m.text.includes('\n'));
+    const text = m.text ? `<div class="xtg-text">${esc(m.text)}</div>${long ? `<button class="xtg-more">${esc(tr('more'))}</button>` : ''}` : '';
+    return `<div class="xtg-who">${avatar}<div class="xtg-line">${name}${withTag ? roleTagHTML(item) : ''}${date}</div></div>${text}`;
+  }
+
+  function setCornerTag(item) {
+    const old = ui.stage.querySelector('.xtg-corner');
+    if (old) old.remove();
+    const html = showsLabel(item) ? roleTagHTML(item) : '';
+    if (html) ui.stage.insertAdjacentHTML('beforeend', `<div class="xtg-corner">${html}</div>`);
+  }
+
+  // Place the corner tag and the bottom overlay on the media's layout box
+  // (offset* ignores CSS transforms, so zooming an image does not move them).
+  function positionOverlay() {
+    if (!ui) return;
+    const media = ui.stage.querySelector(':scope > video, :scope > img');
+    if (!media || !media.offsetWidth || !media.offsetHeight) return;
+    const sw = ui.stage.clientWidth, sh = ui.stage.clientHeight;
+    const ml = media.offsetLeft, mt = media.offsetTop, mw = media.offsetWidth, mh = media.offsetHeight;
+    const corner = ui.stage.querySelector('.xtg-corner');
+    if (corner) {
+      corner.style.left = Math.max(0, ml) + 10 + 'px';
+      corner.style.top = Math.max(0, mt) + 10 + 'px';
+    }
+    const reel = ui.stage.querySelector('.xtg-reel');
+    if (!reel) return;
+    const w = Math.max(mw, Math.min(320, sw));
+    reel.style.left = Math.max(0, Math.min(ml - (w - mw) / 2, sw - w)) + 'px';
+    reel.style.width = w + 'px';
+    reel.style.bottom = Math.max(0, sh - (mt + mh)) + 'px';
+  }
+
+  // Bottom overlay: poster info, plus (for videos) the Reels-style controls
+  function addOverlay(item, media) {
+    const isVid = media.tagName === 'VIDEO';
+    const label = showsLabel(item);
+    if (!label && !isVid) return;
+    const reel = el('div', { className: 'xtg-reel' + (isVid ? ' xtg-reel-vid' : '') });
+    reel.innerHTML = (label ? `<div class="xtg-reel-info">${posterHTML(item, false)}</div>` : '') + (isVid ? `
+      <div class="xtg-vbar">
+        <div class="xtg-vrow">
+          <button class="xtg-vb" data-v="play" title="${esc(tr('playTip'))}"></button>
+          <span class="xtg-time">0:00 / 0:00</span>
+          <span class="xtg-grow"></span>
+          <button class="xtg-vb" data-v="mute" title="${esc(tr('muteTip'))}"></button>
+          <button class="xtg-vb" data-v="fs" title="${esc(tr('fsTip'))}">${ic('max', 18)}</button>
+        </div>
+        <div class="xtg-prog"><div class="xtg-track"><div class="xtg-buf"></div><div class="xtg-played"></div></div></div>
+      </div>` : '');
+    ui.stage.appendChild(reel);
+    setCornerTag(item);
+    if (isVid) {
+      ui.stage.insertAdjacentHTML('beforeend', `<div class="xtg-bigplay">${ic('play', 32, true)}</div>`);
+      wireVideo(media, reel);
+    }
+    media.addEventListener(isVid ? 'loadedmetadata' : 'load', positionOverlay);
+    new ResizeObserver(positionOverlay).observe(media);
+    requestAnimationFrame(positionOverlay);
+  }
+
+  function setShowLabel(on) {
+    S.showLabel = on;
+    store.set('showLabel', on);
+    const cb = ui.root.querySelector('[data-opt="label"]');
+    if (cb) cb.checked = on;
+    refreshLabels();
+  }
+
+  // Re-render labels after an option change or once the thread starter is known
+  function refreshLabels() {
+    if (!ui) return;
+    if (S.view === 'viewer' && S.cur && !S.cur.dead) {
+      const reel = ui.stage.querySelector(':scope > video') && ui.stage.querySelector('.xtg-reel');
+      if (reel) { // keep the playing video, only swap the info
+        let info = reel.querySelector('.xtg-reel-info');
+        if (showsLabel(S.cur)) {
+          if (!info) { info = el('div', { className: 'xtg-reel-info' }); reel.prepend(info); }
+          info.innerHTML = posterHTML(S.cur, false);
+        } else if (info) info.remove();
+        setCornerTag(S.cur);
+        positionOverlay();
+      } else renderStage();
+    }
+    for (const item of S.items) if (!item.dead && (item.type !== 'image' || S.view === 'list')) replaceTile(item);
+  }
+
+  function setThreadStarter(name, fromHeader) {
+    if (!name || (S.starterFromHeader && !fromHeader) || sameName(name, S.threadStarter)) return;
+    S.threadStarter = name;
+    S.starterFromHeader = fromHeader;
+    refreshLabels();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Video controls
+  // ---------------------------------------------------------------------------
+  const fmtTime = (sec) => {
+    const t = Math.floor(isFinite(sec) && sec > 0 ? sec : 0);
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+  };
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else if (ui.stage.requestFullscreen) ui.stage.requestFullscreen().catch(() => {});
+  }
+
+  // Desktop: info + controls appear while the mouse is over the video and hide as soon as it leaves.
+  // Touch: tap pauses and reveals info, controls and seeking; playing again collapses them.
+  function wireVideo(v, reel) {
+    const q = (s) => reel.querySelector(s);
+    const playBtn = q('[data-v="play"]'), muteBtn = q('[data-v="mute"]'), time = q('.xtg-time');
+    const prog = q('.xtg-prog'), track = q('.xtg-track'), played = q('.xtg-played'), buf = q('.xtg-buf');
+    const touch = !matchMedia('(hover: hover)').matches;
+    let hovering = false;
+
+    const toggle = () => { if (v.paused) v.play().catch(() => {}); else v.pause(); };
+    const update = () => ui.stage.classList.toggle('xtg-show', hovering || prog.classList.contains('seeking') || (touch && v.paused));
+    const inside = (node, e) => {
+      const r = node.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    };
+    const onMove = (e) => {
+      if (e.pointerType !== 'mouse') return;
+      const h = inside(v, e) || inside(reel, e);
+      if (h !== hovering) { hovering = h; update(); }
+    };
+    const onLeave = (e) => { if (e.pointerType === 'mouse') { hovering = false; update(); } };
+    const sync = () => {
+      playBtn.innerHTML = ic(v.paused ? 'play' : 'pause', 18, true);
+      ui.stage.classList.toggle('xtg-paused', v.paused && v.readyState > 0);
+      update();
+    };
+    const tick = () => {
+      const d = v.duration || 0;
+      played.style.width = d ? (v.currentTime / d) * 100 + '%' : '0';
+      time.textContent = `${fmtTime(v.currentTime)} / ${fmtTime(d)}`;
+    };
+    const buffered = () => {
+      try { if (v.duration && v.buffered.length) buf.style.width = (v.buffered.end(v.buffered.length - 1) / v.duration) * 100 + '%'; } catch (e) { /* ignore */ }
+    };
+    const volIcon = () => { muteBtn.innerHTML = ic(v.muted || v.volume === 0 ? 'mute' : 'vol', 18); };
+
+    ['play', 'pause', 'loadeddata'].forEach((ev) => v.addEventListener(ev, sync));
+    ['timeupdate', 'loadedmetadata'].forEach((ev) => v.addEventListener(ev, tick));
+    v.addEventListener('progress', buffered);
+    v.addEventListener('volumechange', volIcon);
+    v.addEventListener('click', toggle);
+    v.addEventListener('dblclick', toggleFullscreen);
+    playBtn.onclick = toggle;
+    muteBtn.onclick = () => { v.muted = !v.muted; S.muted = v.muted; store.set('muted', v.muted); };
+    q('[data-v="fs"]').onclick = toggleFullscreen;
+
+    // seek by clicking or dragging the progress bar
+    const seekAt = (e) => {
+      const r = track.getBoundingClientRect();
+      if (v.duration) { v.currentTime = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * v.duration; tick(); }
+    };
+    prog.addEventListener('pointerdown', (e) => {
+      prog.classList.add('seeking');
+      try { prog.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      seekAt(e);
+    });
+    prog.addEventListener('pointermove', (e) => { if (prog.classList.contains('seeking')) seekAt(e); });
+    const stopSeek = () => { prog.classList.remove('seeking'); update(); };
+    prog.addEventListener('pointerup', stopSeek);
+    prog.addEventListener('pointercancel', stopSeek);
+
+    ui.stage.addEventListener('pointermove', onMove);
+    ui.stage.addEventListener('pointerleave', onLeave);
+    S.unwireVideo = () => {
+      ui.stage.removeEventListener('pointermove', onMove);
+      ui.stage.removeEventListener('pointerleave', onLeave);
+      ui.stage.classList.remove('xtg-show', 'xtg-paused');
+    };
+    S.videoCtl = { toggle, mute: () => muteBtn.click() };
+    volIcon();
+    sync();
+    tick();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Views
+  // ---------------------------------------------------------------------------
+  function setView(v) {
+    const rebuild = (v === 'list') !== (S.view === 'list');
+    S.view = v;
+    store.set('view', v);
+    if (rebuild) S.items.forEach(replaceTile);
+    applyView();
+  }
+
+  function applyView() {
+    const v = S.view;
+    ui.viewer.hidden = v !== 'viewer';
+    ui.scroll.hidden = v === 'viewer';
+    ui.grid.classList.toggle('xtg-list', v === 'list');
+    ui.root.querySelectorAll('[data-view]').forEach((b) => b.classList.toggle('on', b.getAttribute('data-view') === v));
+    ui.playBtn.hidden = v !== 'viewer';
+    if (v === 'viewer') {
+      renderStage();
+    } else {
+      stopSlideshow();
+      ui.stage.querySelectorAll('video').forEach((x) => x.pause());
+      if (S.cur && S.cur.el) S.cur.el.scrollIntoView({ block: 'center' });
+    }
+    scheduleStatus();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Viewer: zoom, pan, swipe
+  // ---------------------------------------------------------------------------
+  let Z = { s: 1, x: 0, y: 0 };
+  const stageImg = () => ui.stage.querySelector(':scope > img');
+
+  function applyZoom() {
+    const img = stageImg();
+    if (!img) return;
+    img.style.transform = `translate(${Z.x}px, ${Z.y}px) scale(${Z.s})`;
+    img.classList.toggle('zoomed', Z.s > 1);
+    ui.stage.classList.toggle('zoomed', Z.s > 1);
+  }
+
+  function zoomTo(scale, cx, cy) {
+    const s = Math.min(6, Math.max(1, scale));
+    if (s === 1) { Z = { s: 1, x: 0, y: 0 }; applyZoom(); return; }
+    const r = ui.stage.getBoundingClientRect();
+    const px = cx - (r.left + r.width / 2), py = cy - (r.top + r.height / 2);
+    const k = s / Z.s;
+    Z = { s, x: px - (px - Z.x) * k, y: py - (py - Z.y) * k }; // keep the point under the cursor fixed
+    applyZoom();
+  }
+
+  function setupStageGestures() {
+    const st = ui.stage;
+    const pointers = new Map();
+    let start = null, pinch = null;
+
+    st.addEventListener('wheel', (e) => {
+      if (!stageImg()) return;
+      e.preventDefault();
+      zoomTo(Z.s * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY);
+    }, { passive: false });
+
+    st.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('video, iframe, a, .xtg-reel, .xtg-embed')) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return; // right/middle click: leave the context menu alone
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1) start = { x: e.clientX, y: e.clientY, zx: Z.x, zy: Z.y, t: Date.now(), moved: false, onImg: e.target === stageImg() };
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: Z.s };
+      }
+      try { st.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+
+    st.addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const img = stageImg();
+      if (pointers.size === 2 && pinch && img) {
+        const [a, b] = [...pointers.values()];
+        zoomTo((pinch.s * Math.hypot(a.x - b.x, a.y - b.y)) / pinch.d, (a.x + b.x) / 2, (a.y + b.y) / 2);
+        if (start) start.moved = true;
+        return;
+      }
+      if (!start) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (Math.abs(dx) + Math.abs(dy) > 6) start.moved = true;
+      if (Z.s > 1 && img) {
+        img.classList.add('dragging');
+        Z.x = start.zx + dx;
+        Z.y = start.zy + dy;
+        applyZoom();
+      }
+    });
+
+    const end = (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.delete(e.pointerId);
+      const img = stageImg();
+      if (img) img.classList.remove('dragging');
+      if (pointers.size < 2) pinch = null;
+      if (pointers.size || !start) return;
+      const dx = e.clientX - start.x;
+      if (!start.moved && e.type === 'pointerup' && img && start.onImg) {
+        if (Z.s > 1) zoomTo(1); else zoomTo(2.5, e.clientX, e.clientY);   // click to zoom in / out
+      } else if (Z.s === 1 && Math.abs(dx) > 60 && Date.now() - start.t < 800) {
+        step(dx < 0 ? 1 : -1, true);                                      // horizontal swipe
+      }
+      start = null;
+    };
+    st.addEventListener('pointerup', end);
+    st.addEventListener('pointercancel', end);
+  }
+
+  function showItem(item) {
+    S.cur = item;
+    if (ui.viewer.hidden && S.view === 'viewer') applyView();
+    else renderStage();
+  }
+
+  // Move to the next live item in direction d; returns false at either end
+  function step(d, byUser) {
+    const from = S.cur ? S.items.indexOf(S.cur) : -1;
+    for (let i = from + d; i >= 0 && i < S.items.length; i += d) {
+      if (S.items[i].dead) continue;
+      if (byUser) S.userMoved = true;
+      S.lastDir = d;
+      showItem(S.items[i]);
+      return true;
+    }
+    return false;
+  }
+
+  function renderStage() {
+    if (!ui || S.view !== 'viewer') return;
+    const item = S.cur;
+    Z = { s: 1, x: 0, y: 0 };
+    ui.stage.querySelectorAll('video').forEach((x) => x.pause());
+    ui.stage.innerHTML = '';
+    ui.stage.classList.remove('zoomed');
+    clearTimeout(S.slideTimer);
+    if (S.unwireVideo) { S.unwireVideo(); S.unwireVideo = null; }
+    S.videoCtl = null;
+    if (!item) { scheduleStatus(); return; }
+
+    ui.postLink.href = postUrl(item);
+    ui.srcLink.href = item.source || item.url || item.candidates[0] || '#';
+
+    if (item.dead) {
+      ui.stage.innerHTML = `<div class="xtg-msg">${ic('dead', 34)}${esc(tr('deadLong'))}<br>` +
+        (item.source ? `<a href="${esc(item.source)}" target="_blank" rel="noopener noreferrer">${esc(tr('openOriginal'))}</a>` : '') + '</div>';
+    } else if (item.type === 'image') {
+      const img = el('img', { alt: '', draggable: false });
+      loadImage(img, item, uniq([...item.candidates, item.working]), () => markDead(item));
+      ui.stage.appendChild(img);
+      addOverlay(item, img);
+    } else if (item.type === 'video') {
+      const v = mediaEl('video', { autoplay: true, muted: !!S.muted });
+      if (item.thumb) v.poster = item.thumb;
+      loadVideo(v, item, () => markDead(item));
+      v.addEventListener('ended', () => { if (S.slideshow) nextOrStop(); });
+      ui.stage.appendChild(v);
+      addOverlay(item, v);
+    } else {
+      const f = iframeEl(item.url, false);
+      if (showsLabel(item)) {
+        // embedded players have their own controls we cannot change, so the info goes below the frame
+        const wrap = el('div', { className: 'xtg-embed' });
+        wrap.append(f, el('div', { className: 'xtg-post', innerHTML: posterHTML(item, true) }));
+        ui.stage.appendChild(wrap);
+      } else {
+        ui.stage.appendChild(f);
+      }
+    }
+
+    S.items.forEach((i) => i.thumbEl && i.thumbEl.classList.toggle('on', i === item));
+    if (item.thumbEl) {
+      const s = ui.strip, th = item.thumbEl;
+      s.scrollTo({ left: th.offsetLeft - s.clientWidth / 2 + th.offsetWidth / 2, behavior: 'smooth' });
+    }
+    scheduleStatus();
+
+    // preload the next image
+    const next = S.items.slice(S.items.indexOf(item) + 1).find((i) => !i.dead);
+    if (next && next.type === 'image') el('img', { referrerPolicy: 'no-referrer', src: next.working || next.candidates[0] });
+    if (S.slideshow) scheduleSlide();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Slideshow
+  // ---------------------------------------------------------------------------
+  function nextOrStop() { if (!step(1, false)) stopSlideshow(); }
+
+  function scheduleSlide() {
+    clearTimeout(S.slideTimer);
+    const item = S.cur;
+    if (!item || item.type === 'video') return; // videos advance when they end
+    S.slideTimer = setTimeout(nextOrStop, item.type === 'embed' ? SLIDE_EMBED_MS : SLIDE_MS);
+  }
+
+  function setSlideshow(on) {
+    S.slideshow = on;
+    clearTimeout(S.slideTimer);
+    if (!ui) return;
+    ui.playBtn.classList.toggle('on', on);
+    ui.playBtn.querySelector('.xtg-pi').innerHTML = ic(on ? 'pause' : 'play', 16, true);
+    if (on) scheduleSlide();
+  }
+  const toggleSlideshow = () => setSlideshow(!S.slideshow);
+  const stopSlideshow = () => setSlideshow(false);
+
+  // ---------------------------------------------------------------------------
+  // Loading the whole thread
+  // ---------------------------------------------------------------------------
+  async function loadThread() {
+    S.started = true;
+    S.totalPages = getTotalPages(document);
+    setThreadStarter(detectThreadStarter(document), true);
+    const cur = currentPage();
+    const pageUrl = makePageUrl();
+    scheduleStatus();
+    // the open page first (no request needed), then the others in order
+    const pages = [cur, ...Array.from({ length: S.totalPages }, (_, i) => i + 1).filter((p) => p !== cur)];
+    const pageQueue = makeQueue(PAGE_CONCURRENCY);
+    await Promise.all(pages.map((p) => pageQueue(async () => {
+      if (S.stopped) return;
+      const url = pageUrl(p);
+      try {
+        const doc = p === cur ? document : await fetchDoc(url);
+        if (!S.stopped) processDoc(doc, p, url);
+      } catch (e) {
+        S.pageErrors++;
+        console.warn('[XenForo Thread Gallery] failed to load page', p, e);
+      }
+      S.pagesDone++;
+      scheduleStatus();
+      if (p !== cur) await sleep(300); // be gentle with the forum
+    })));
+    scheduleStatus();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Open / close
+  // ---------------------------------------------------------------------------
+  let savedOverflow = '';
+
+  function openGallery() {
+    if (!ui) buildUI();
+    if (ui.root.hidden) {
+      ui.root.hidden = false;
+      void ui.root.offsetWidth; // flush layout so the fade-in transition runs
+      ui.root.classList.add('xtg-open');
+      savedOverflow = docEl.style.overflow;
+      docEl.style.overflow = 'hidden';
+      applyView();
+    }
+    if (!S.started) loadThread();
+  }
+
+  function closeGallery() {
+    stopSlideshow();
+    ui.stage.querySelectorAll('video').forEach((x) => x.pause());
+    ui.stage.querySelectorAll('iframe').forEach((x) => x.remove()); // stop embedded players
+    ui.root.classList.remove('xtg-open');
+    ui.root.hidden = true;
+    ui.menu.hidden = true;
+    docEl.style.overflow = savedOverflow;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------------
+  document.head.appendChild(el('style', { textContent: CSS }));
+  const fab = el('button', { id: 'xtg-fab', title: tr('fabTip'), innerHTML: ic('images', 17) + esc(tr('fab')) });
+  fab.onclick = openGallery;
+  document.body.appendChild(fab);
+  if (typeof GM_registerMenuCommand === 'function') {
+    GM_registerMenuCommand(tr('menuOpen'), openGallery);
+    GM_registerMenuCommand(tr('menuHosts'), editHosts);
+  }
+})();
