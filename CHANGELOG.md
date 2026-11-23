@@ -16,6 +16,17 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+## [2.3.0] - 2026-11-24
+
+### Added
 - Progressive image sizes for Imgur and Chevereto: small thumbnails in the filmstrip, medium in the grid, and a medium version shown while a full image is still loading after 0.8 s.
 - Lighter video on slow connections or data saver: Streamable's mobile version and RedGifs SD. RedGifs now plays as a native video in the Reels-style player, with the embedded player as fallback.
 
