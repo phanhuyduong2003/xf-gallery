@@ -16,6 +16,17 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+## [2.4.0] - 2026-11-24
+
+### Added
 - Slow-server notice: after 5 seconds of loading, a message with **Retry** and **Open original link** appears (the poster info stays hidden until the media has loaded).
 
 ### Changed

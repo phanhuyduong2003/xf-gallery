@@ -16,6 +16,17 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
+-
+
+### Thay đổi
+-
+
+### Sửa lỗi
+-
+
+## [2.4.0] - 2026-11-24
+
+### Thêm
 - Thông báo máy chủ chậm: sau 5 giây tải, hiện thông báo kèm nút **Thử lại** và **Mở link gốc** (thông tin người đăng vẫn ẩn cho tới khi tải xong).
 
 ### Thay đổi
