@@ -7,6 +7,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 ## Tính năng
 
 - **Cả chủ đề, mọi trang.** Bấm nút **Album** trên trang chủ đề bất kỳ. Script tải ngầm các trang (từng trang một, nghỉ một chút giữa các trang để không làm quá tải diễn đàn) và hiện ảnh/video theo đúng thứ tự bài viết trong lúc tải.
+- **Bộ lọc** tất cả / ảnh / video, cho biết ảnh thuộc trang nào, vạch chia trang trong dải ảnh, về mục đầu / cuối.
 - **3 kiểu xem**
   - **Xem**: từng ảnh, kèm dải ảnh thu nhỏ. Phím mũi tên hoặc vuốt để chuyển; bấm, lăn chuột hoặc chụm 2 ngón để phóng to; kéo để di chuyển.
   - **Lưới**: toàn bộ ảnh thu nhỏ trong một màn hình.
@@ -40,6 +41,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 | Phím | Chức năng |
 |---|---|
 | ← / → | Ảnh trước / sau |
+| Home / End | Mục đầu tiên / cuối cùng |
 | Space | Tự động phát |
 | G | Bật/tắt chế độ lưới |
 | I | Bật/tắt nhãn người đăng |

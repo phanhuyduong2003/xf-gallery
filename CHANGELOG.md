@@ -19,10 +19,15 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 - Poster info on images, like on videos: on desktop it appears while hovering the image; on phones a compact line (name + one line of text) is always shown and expands on tap.
 - Per-item captions in posts with several images/videos: each item shows the text right next to it (captions above or below their item are detected per post), its position in the post ("2 of 5 in this post") and a *Whole post* button.
 - Separate options to show info on images and on videos (both on by default). **I** toggles the kind being viewed.
+- Filter: All / Images / Videos, with counts, next to the counter.
+- Page indicator ("Page 2/3") and page dividers in the filmstrip; the filmstrip keeps the viewed item centred.
+- First / last buttons at the ends of the filmstrip, and **Home** / **End** keys.
+- Drag the filmstrip with the mouse, or scroll it with the mouse wheel.
 
 ### Changed
 - Autoplay is on by default and remembers your choice. Its button shows ▶ when off and a pause icon when on.
 - Previous / next buttons never cover the media: on desktop they sit in margins beside it, on phones at both ends of the filmstrip.
+- Faster, gentler image loading: thumbnails load only when visible and at most 4 at a time, the opened image gets priority and shows its cached thumbnail with a spinner until the full image arrives, and neighbouring images are preloaded one at a time.
 
 ## [2.1.1] - 2026-11-24
 

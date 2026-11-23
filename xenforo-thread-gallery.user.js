@@ -77,7 +77,7 @@
       grid: 'Grid', gridTip: 'Thumbnail grid (G)',
       scroll: 'Scroll', scrollTip: 'Vertical scroll',
       stop: 'Stop loading', stopShort: 'Stop', stopTip: 'Stop loading the remaining pages',
-      options: 'Options', close: 'Close (Esc)', prev: 'Previous (←)', next: 'Next (→)',
+      options: 'Options', close: 'Close (Esc)', prev: 'Previous (←)', next: 'Next (→)', first: 'First (Home)', last: 'Last (End)',
       optInfoVideos: 'Show info on videos (I)',
       optInfoImages: 'Show info on images (I)',
       fullPost: 'Whole post',
@@ -98,6 +98,9 @@
       deadLong: 'This image/video was removed or failed to load.',
       openOriginal: 'Open original link ↗',
       page: (n) => `Page ${n}`,
+      pageOf: (p, n) => `Page ${p}/${n}`,
+      fAll: 'All', fImages: 'Images', fVideos: 'Videos', filterTip: 'Show only this kind',
+      pageShort: (p) => `p. ${p}`,
       postLink: 'post ↗', sourceLink: 'source ↗', video: 'video',
       op: 'Thread starter', member: 'Member',
       more: 'Show more', less: 'Show less',
@@ -120,7 +123,7 @@
       grid: 'Lưới', gridTip: 'Lưới ảnh thu nhỏ (G)',
       scroll: 'Cuộn', scrollTip: 'Cuộn dọc',
       stop: 'Dừng tải', stopShort: 'Dừng', stopTip: 'Dừng tải các trang còn lại',
-      options: 'Tuỳ chọn', close: 'Đóng (Esc)', prev: 'Trước (←)', next: 'Sau (→)',
+      options: 'Tuỳ chọn', close: 'Đóng (Esc)', prev: 'Trước (←)', next: 'Sau (→)', first: 'Đầu tiên (Home)', last: 'Cuối cùng (End)',
       optInfoVideos: 'Hiện thông tin trên video (phím I)',
       optInfoImages: 'Hiện thông tin trên ảnh (phím I)',
       fullPost: 'Xem cả bài',
@@ -141,6 +144,9 @@
       deadLong: 'Ảnh/video này đã bị xoá hoặc không tải được.',
       openOriginal: 'Mở link gốc ↗',
       page: (n) => `Trang ${n}`,
+      pageOf: (p, n) => `Trang ${p}/${n}`,
+      fAll: 'Tất cả', fImages: 'Ảnh', fVideos: 'Video', filterTip: 'Chỉ hiện loại này',
+      pageShort: (p) => `Tr. ${p}`,
       postLink: 'bài gốc ↗', sourceLink: 'nguồn ↗', video: 'video',
       op: 'Tác giả chủ đề', member: 'Thành viên',
       more: 'Xem thêm', less: 'Thu gọn',
@@ -193,6 +199,8 @@
     settings: '<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>',
     x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     left: '<path d="m15 18-6-6 6-6"/>',
+    first: '<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
+    last: '<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
     right: '<path d="m9 18 6-6-6-6"/>',
     dead: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
     vol: '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
@@ -759,6 +767,8 @@
     slideshow: store.get('autoplay', true), // autoplay is on by default; the choice is remembered
     slideTimer: null,
     unwireVideo: null,
+    stripTouched: 0,
+    filter: store.get('filter', 'all'), // all | image | video (video includes embedded players)         // last time the user scrolled the filmstrip by hand
     gen: 0,                  // bumped by "Reload" so late results of the previous load are ignored
     noCache: false,          // set by "Reload": ignore cached data for this load
     pagesCached: 0,
@@ -787,7 +797,20 @@
 .xtg-tools{display:flex;align-items:center;gap:2px}
 .xtg-sep{width:1px;height:20px;background:#2a2d33;margin:0 4px}
 .xtg-short{display:none}
-.xtg-counter{font-weight:600;min-width:60px;font-variant-numeric:tabular-nums}
+.xtg-counter{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.xtg-pageinfo{flex:0 0 auto;font-size:12px;color:#d6d9de;background:#22252b;border-radius:6px;padding:2px 7px;white-space:nowrap}
+.xtg-pageinfo:empty{display:none}
+.xtg-filter{flex:0 0 auto;display:inline-flex;gap:2px;padding:2px;background:#1b1d22;border-radius:7px}
+.xtg-fb{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:0;border-radius:5px;background:none;
+  color:#9aa0a8;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.xtg-fb:hover{color:#fff}
+.xtg-fb b{font-weight:600;color:#d6d9de;font-variant-numeric:tabular-nums}
+.xtg-fb.on{background:#2c3038;color:#fff}
+.xtg-fb.on b{color:#fff}
+.xtg-f-image [data-kind="video"],.xtg-f-video [data-kind="image"]{display:none}
+.xtg-pdiv{flex:0 0 auto;align-self:center;padding:2px 6px 2px 8px;margin-left:2px;border-left:1px solid #33363d;
+  font-size:11px;color:#9aa0a8;white-space:nowrap}
+.xtg-pdiv:first-child{border-left:0;margin-left:0;padding-left:2px}
 .xtg-status{color:#8b9097;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .xtg-grow{flex:1}
 .xtg-ib{height:32px;min-width:32px;padding:0 9px;border:0;border-radius:7px;background:transparent;color:#d6d9de;
@@ -826,11 +849,22 @@
 .xtg-prev .xtg-i{margin-right:2px}.xtg-next .xtg-i{margin-left:2px}
 .xtg-stripbar{display:flex;align-items:center;border-top:1px solid #24262c;background:#0f1013}
 .xtg-snav{display:none}
-.xtg-strip{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;padding:8px 10px;
+.xtg-edge{display:flex;align-items:center;justify-content:center;flex:0 0 40px;align-self:stretch;padding:0;border:0;
+  background:none;color:#aeb3ba;cursor:pointer}
+.xtg-edge:hover{color:#fff;background:#1b1d22}
+.xtg-edge:disabled{opacity:.25;pointer-events:none}
+.xtg-strip{position:relative;flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;padding:8px 10px;
   scrollbar-width:thin;scrollbar-color:#3a3d44 transparent;min-height:72px}
 .xtg-th{flex:0 0 auto;width:72px;height:54px;border-radius:5px;overflow:hidden;cursor:pointer;position:relative;opacity:.5;
   outline:2px solid transparent;outline-offset:-2px;background:#1b1d21}
 .xtg-th:hover{opacity:.85}
+.xtg-strip{cursor:grab;user-select:none;-webkit-user-select:none}
+.xtg-strip.xtg-dragging{cursor:grabbing;scroll-behavior:auto}
+.xtg-strip.xtg-dragging .xtg-th{pointer-events:none}
+.xtg-stage>img.xtg-preview{width:100%;height:100%;object-fit:contain;filter:blur(6px) brightness(.85)}
+.xtg-stage.xtg-loading::after{content:'';position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;z-index:2;
+  border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:xtg-spin .8s linear infinite;pointer-events:none}
+@keyframes xtg-spin{to{transform:rotate(360deg)}}
 .xtg-th.on{opacity:1;outline-color:#1f6feb}
 .xtg-th img,.xtg-th video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .xtg-th span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 3px #000}
@@ -936,7 +970,8 @@ a.xtg-name:hover{text-decoration:underline}
   /* phones: prev/next sit at both ends of the filmstrip, so nothing covers the media */
   .xtg-nav{display:none}
   .xtg-stage{padding:0}
-  .xtg-snav{display:flex;align-items:center;justify-content:center;flex:0 0 44px;align-self:stretch;padding:0;border:0;
+  .xtg-edge{flex-basis:34px}
+  .xtg-snav{display:flex;align-items:center;justify-content:center;flex:0 0 40px;align-self:stretch;padding:0;border:0;
     background:none;color:#e8e8ea;cursor:pointer}
   .xtg-snav:active{background:#1b1d22}
   .xtg-snav:disabled{opacity:.25;pointer-events:none}
@@ -946,6 +981,9 @@ a.xtg-name:hover{text-decoration:underline}
   .xtg-head{order:1;height:40px}
   .xtg-close{order:2;width:40px;height:40px}
   .xtg-head .xtg-ib{height:28px;padding:0 8px;font-size:12px}
+  .xtg-head{gap:5px}
+  .xtg-fb{padding:0 6px}
+  .xtg-fb .xtg-i{display:none}
   .xtg-tools{order:3;flex:1 0 100%;margin:0 -4px 0 -12px;padding:4px 4px 6px;gap:0;border-top:1px solid #24262c;
     overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .xtg-tools::-webkit-scrollbar{display:none}
@@ -974,6 +1012,12 @@ a.xtg-name:hover{text-decoration:underline}
         <div class="xtg-top">
           <div class="xtg-head">
             <span class="xtg-counter">0 / 0</span>
+            <span class="xtg-pageinfo"></span>
+            <span class="xtg-filter" role="group" title="${esc(tr('filterTip'))}">
+              <button class="xtg-fb" data-filter="all"><span>${esc(tr('fAll'))}</span><b>0</b></button>
+              <button class="xtg-fb" data-filter="image">${ic('image', 13)}<span>${esc(tr('fImages'))}</span><b>0</b></button>
+              <button class="xtg-fb" data-filter="video">${ic('video', 13)}<span>${esc(tr('fVideos'))}</span><b>0</b></button>
+            </span>
             <span class="xtg-status"></span>
             ${btn('data-act="stop"', ic('stop', 16), tr('stop'), tr('stopTip'), tr('stopShort'))}
           </div>
@@ -1006,9 +1050,11 @@ a.xtg-name:hover{text-decoration:underline}
               <button class="xtg-nav xtg-next" title="${esc(tr('next'))}" aria-label="${esc(tr('next'))}">${ic('right', 28)}</button>
             </div>
             <div class="xtg-stripbar">
+              <button class="xtg-edge xtg-first" title="${esc(tr('first'))}" aria-label="${esc(tr('first'))}">${ic('first', 20)}</button>
               <button class="xtg-snav xtg-sprev" data-nav="-1" title="${esc(tr('prev'))}" aria-label="${esc(tr('prev'))}">${ic('left', 22)}</button>
               <div class="xtg-strip"></div>
               <button class="xtg-snav xtg-snext" data-nav="1" title="${esc(tr('next'))}" aria-label="${esc(tr('next'))}">${ic('right', 22)}</button>
+              <button class="xtg-edge xtg-last" title="${esc(tr('last'))}" aria-label="${esc(tr('last'))}">${ic('last', 20)}</button>
             </div>
           </div>
           <div class="xtg-scroll" hidden>
@@ -1020,10 +1066,11 @@ a.xtg-name:hover{text-decoration:underline}
     document.body.appendChild(root);
     const q = (s) => root.querySelector(s);
     ui = {
-      root, modal: q('.xtg-modal'), counter: q('.xtg-counter'), status: q('.xtg-status'),
+      root, modal: q('.xtg-modal'), counter: q('.xtg-counter'), pageInfo: q('.xtg-pageinfo'), status: q('.xtg-status'),
       playBtn: q('[data-act="play"]'), postLink: q('[data-act="post"]'), srcLink: q('[data-act="src"]'),
       stopBtn: q('[data-act="stop"]'), menu: q('.xtg-menu'),
       prevBtns: root.querySelectorAll('.xtg-prev, .xtg-sprev'), nextBtns: root.querySelectorAll('.xtg-next, .xtg-snext'),
+      firstBtn: q('.xtg-first'), lastBtn: q('.xtg-last'),
       viewer: q('.xtg-viewer'), stage: q('.xtg-stage'), strip: q('.xtg-strip'),
       scroll: q('.xtg-scroll'), grid: q('.xtg-grid'), empty: q('.xtg-empty'),
     };
@@ -1040,6 +1087,8 @@ a.xtg-name:hover{text-decoration:underline}
       }
       if (e.target === root) { closeGallery(); return; } // click on the backdrop
       if (!e.target.closest('.xtg-menu, [data-act="menu"]')) ui.menu.hidden = true;
+      const filterBtn = e.target.closest('[data-filter]');
+      if (filterBtn) { setFilter(filterBtn.getAttribute('data-filter')); return; }
       const viewBtn = e.target.closest('[data-view]');
       if (viewBtn) { setView(viewBtn.getAttribute('data-view')); return; }
       const act = e.target.closest('[data-act]');
@@ -1063,13 +1112,49 @@ a.xtg-name:hover{text-decoration:underline}
       S.showDead = e.target.checked;
       ui.grid.classList.toggle('xtg-hide-dead', !S.showDead);
     });
+    enableDragScroll(ui.strip);
     ui.prevBtns.forEach((b) => { b.onclick = () => step(-1, true); });
     ui.nextBtns.forEach((b) => { b.onclick = () => step(1, true); });
+    ui.firstBtn.onclick = () => jumpToEdge(-1);
+    ui.lastBtn.onclick = () => jumpToEdge(1);
     new ResizeObserver(positionOverlay).observe(ui.stage);
     setupStageGestures();
     setSlideshow(S.slideshow, false);
+    setFilter(S.filter);
     document.addEventListener('keydown', onKey, true);
     applyView();
+  }
+
+  // Drag the filmstrip sideways with the mouse; a click without dragging still opens the thumbnail.
+  // The vertical mouse wheel scrolls it sideways too.
+  function enableDragScroll(strip) {
+    let down = null, dragged = false;
+    strip.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      down = { x: e.clientX, left: strip.scrollLeft };
+      S.stripTouched = Date.now();
+      dragged = false;
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!down) return;
+      const dx = e.clientX - down.x;
+      if (!dragged && Math.abs(dx) > 5) { dragged = true; strip.classList.add('xtg-dragging'); }
+      if (dragged) { strip.scrollLeft = down.left - dx; e.preventDefault(); }
+    });
+    window.addEventListener('pointerup', () => {
+      if (!down) return;
+      down = null;
+      strip.classList.remove('xtg-dragging');
+      if (dragged) setTimeout(() => { dragged = false; }, 0); // after the click that follows this pointerup
+    });
+    strip.addEventListener('touchstart', () => { S.stripTouched = Date.now(); }, { passive: true });
+    strip.addEventListener('click', (e) => { if (dragged) { e.stopPropagation(); e.preventDefault(); } }, true);
+    strip.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      strip.scrollLeft += e.deltaY;
+      S.stripTouched = Date.now();
+      e.preventDefault();
+    }, { passive: false });
   }
 
   function onKey(e) {
@@ -1091,6 +1176,7 @@ a.xtg-name:hover{text-decoration:underline}
       return;
     }
     if (k === 'g') { setView(S.view === 'grid' ? 'viewer' : 'grid'); return; }
+    if (k === 'Home' || k === 'End') { jumpToEdge(k === 'Home' ? -1 : 1); e.preventDefault(); return; }
     if (S.view !== 'viewer') return;
     if (k === 'ArrowRight') { step(1, true); e.preventDefault(); }
     else if (k === 'ArrowLeft') { step(-1, true); e.preventDefault(); }
@@ -1115,6 +1201,27 @@ a.xtg-name:hover{text-decoration:underline}
   // Status bar (many changes in a row are batched into one update)
   // ---------------------------------------------------------------------------
   const liveItems = () => S.items.filter((i) => !i.dead);
+  const kindOf = (item) => (item.type === 'image' ? 'image' : 'video');
+  const passesFilter = (item) => S.filter === 'all' || kindOf(item) === S.filter;
+  const visibleItems = () => S.items.filter((i) => !i.dead && passesFilter(i));
+
+  function setFilter(f) {
+    S.filter = f;
+    store.set('filter', f);
+    ui.root.classList.toggle('xtg-f-image', f === 'image');
+    ui.root.classList.toggle('xtg-f-video', f === 'video');
+    ui.root.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('on', b.getAttribute('data-filter') === f));
+    if (S.cur && !passesFilter(S.cur)) {
+      // jump to the nearest item of the chosen kind, preferring the ones after the current item
+      const i = S.items.indexOf(S.cur);
+      const pick = S.items.slice(i + 1).find((x) => !x.dead && passesFilter(x)) ||
+        S.items.slice(0, i).reverse().find((x) => !x.dead && passesFilter(x));
+      S.cur = null;
+      if (pick) showItem(pick); else renderStage();
+    }
+    updateDividers();
+    scheduleStatus();
+  }
   const isLoading = () => !S.stopped && (S.pagesDone < S.totalPages || S.pending > 0);
   let statusQueued = false;
   function scheduleStatus() {
@@ -1124,23 +1231,29 @@ a.xtg-name:hover{text-decoration:underline}
   }
 
   function renderStatus() {
-    const live = liveItems();
+    const all = liveItems();
     let images = 0;
-    for (const i of live) if (i.type === 'image') images++;
-    const dead = S.items.length - live.length;
+    for (const i of all) if (i.type === 'image') images++;
+    const counts = { all: all.length, image: images, video: all.length - images };
+    ui.root.querySelectorAll('[data-filter]').forEach((b) => { b.querySelector('b').textContent = counts[b.getAttribute('data-filter')]; });
+    const live = visibleItems();
+    const dead = S.items.length - all.length;
     const loading = isLoading();
-    let st = tr('counts', images, live.length - images);
+    let st = '';
     if (dead) st += tr('broken', dead);
     if (loading) st += tr('loadingPages', S.pagesDone, S.totalPages, S.pending);
     else if (S.stopped && S.pagesDone < S.totalPages) st += tr('stopped', S.pagesDone, S.totalPages);
     if (S.pagesCached) st += tr('fromCache', S.pagesCached);
     if (S.pageErrors) st += tr('pageErrors', S.pageErrors);
-    ui.status.textContent = st;
+    ui.status.textContent = st.replace(/^ · /, '');
     ui.stopBtn.hidden = !loading;
     const pos = S.cur && !S.cur.dead ? live.indexOf(S.cur) : -1;
     ui.counter.textContent = `${pos + 1} / ${live.length}`;
+    ui.pageInfo.textContent = pos >= 0 && S.totalPages > 1 ? tr('pageOf', S.cur.page, S.totalPages) : '';
     ui.prevBtns.forEach((b) => { b.disabled = pos <= 0; });
     ui.nextBtns.forEach((b) => { b.disabled = pos < 0 || pos >= live.length - 1; });
+    ui.firstBtn.disabled = pos <= 0;
+    ui.lastBtn.disabled = pos < 0 || pos >= live.length - 1;
     const msg = loading ? tr('searching') : tr('none');
     ui.empty.textContent = msg;
     ui.empty.style.display = live.length ? 'none' : '';
@@ -1195,9 +1308,10 @@ a.xtg-name:hover{text-decoration:underline}
       item.thumbEl = buildThumb(item);
       const nextThumb = after.find((i) => i.thumbEl);
       ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
+      scheduleDividers();
       if (item.type !== 'image' && !item.thumb) ensureThumb(item);
       // pick the opening item until the user navigates (results arrive out of order)
-      if (!S.userMoved) {
+      if (!S.userMoved && passesFilter(item)) {
         if (S.resumeKey && key === S.resumeKey) { S.userMoved = true; showItem(item); }
         else if (!S.cur || isBetterStart(item)) showItem(item);
       }
@@ -1254,7 +1368,7 @@ a.xtg-name:hover{text-decoration:underline}
     if (item.dead) return;
     item.dead = true;
     replaceTile(item);
-    if (item.thumbEl) { item.thumbEl.remove(); item.thumbEl = null; }
+    if (item.thumbEl) { item.thumbEl.remove(); item.thumbEl = null; scheduleDividers(); }
     if (S.cur === item && !step(S.lastDir, false) && !step(-S.lastDir, false)) renderStage();
     scheduleStatus();
   }
@@ -1271,7 +1385,7 @@ a.xtg-name:hover{text-decoration:underline}
 
   // Try each URL; then download through the manager (hotlink protection); retry everything once
   // after 2 s (flaky network) before declaring the item dead.
-  function loadImage(img, item, urls, onFail) {
+  function loadImage(img, item, urls, onFail, onOk) {
     let i = 0, blobTried = false, retried = false;
     img.referrerPolicy = 'no-referrer';
     img.decoding = 'async';
@@ -1293,8 +1407,45 @@ a.xtg-name:hover{text-decoration:underline}
     img.onload = () => {
       if (isPlaceholder(img)) { tryNext(); return; }
       if (!item.working && item.candidates.includes(img.src)) item.working = img.src;
+      if (onOk) onOk(img.src);
     };
     tryNext();
+  }
+
+  // Thumbnails load only when (nearly) visible and at most THUMB_LOADS at a time. The image being viewed
+  // is then not stuck behind dozens of thumbnail downloads, and hosts get fewer simultaneous requests.
+  const THUMB_LOADS = 4;
+  const thumbLoadQueue = makeQueue(THUMB_LOADS);
+  const lazyObserver = new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue;
+      lazyObserver.unobserve(en.target);
+      en.target.xtgStart();
+    }
+  }, { rootMargin: '300px' });
+
+  function lazyImage(img, item, urls, onFail, priority = 'low') {
+    img.fetchPriority = priority;
+    img.draggable = false;
+    img.xtgStart = () => thumbLoadQueue(() => new Promise((done) => {
+      if (!img.isConnected) { done(); return; }
+      loadImage(img, item, urls, () => { onFail(); done(); }, (src) => { if (!item.shown) item.shown = src; done(); });
+    }));
+    lazyObserver.observe(img);
+  }
+
+  // Preload the neighbours of the viewed item one at a time, after the item itself has loaded
+  const preloadQueue = makeQueue(1);
+  function preloadAround(item) {
+    const i = S.items.indexOf(item);
+    [1, 2, -1].map((d) => S.items[i + d]).filter((x) => x && !x.dead && x.type === 'image' && !x.working).forEach((x) => {
+      preloadQueue(() => new Promise((done) => {
+        if (S.cur !== item || x.working) { done(); return; } // the user moved on: skip stale preloads
+        const im = new Image();
+        im.fetchPriority = 'low';
+        loadImage(im, x, x.candidates.slice(), done, () => done());
+      }));
+    });
   }
 
   // frag '#t=1' makes thumbnails show the frame at 1 s instead of the (often black) first frame
@@ -1323,6 +1474,7 @@ a.xtg-name:hover{text-decoration:underline}
   // ---------------------------------------------------------------------------
   function buildTile(item) {
     const t = el('div', { className: 'xtg-tile' });
+    t.dataset.kind = kindOf(item);
     const list = S.view === 'list';
     const cap = el('div', { className: 'xtg-cap' });
     cap.innerHTML = list
@@ -1344,8 +1496,8 @@ a.xtg-name:hover{text-decoration:underline}
     const open = () => { S.userMoved = true; setView('viewer'); showItem(item); };
 
     if (item.type === 'image') {
-      const img = el('img', { loading: 'lazy', alt: '' });
-      loadImage(img, item, uniq(list ? [item.working, ...item.candidates] : [item.working, item.thumb, ...item.candidates]), fail);
+      const img = el('img', { alt: '' });
+      lazyImage(img, item, uniq(list ? [item.working, ...item.candidates] : [item.working, item.thumb, ...item.candidates]), fail, list ? 'auto' : 'low');
       img.onclick = open;
       t.appendChild(img);
     } else if (list && item.type === 'video') {
@@ -1384,11 +1536,43 @@ a.xtg-name:hover{text-decoration:underline}
     item.el = fresh;
   }
 
+  // Page dividers ("p. 2") in the filmstrip, rebuilt shortly after items arrive
+  let dividerTimer = null;
+  function scheduleDividers() {
+    clearTimeout(dividerTimer);
+    dividerTimer = setTimeout(updateDividers, 80);
+  }
+  function updateDividers() {
+    ui.strip.querySelectorAll('.xtg-pdiv').forEach((d) => d.remove());
+    if (S.totalPages > 1) {
+      let last = null;
+      for (const th of [...ui.strip.children]) {
+        if (S.filter !== 'all' && th.dataset.kind !== S.filter) continue;
+        if (th.dataset.page === last) continue;
+        last = th.dataset.page;
+        th.before(el('div', { className: 'xtg-pdiv', textContent: tr('pageShort', last) }));
+      }
+    }
+    centerStrip(false, false);
+  }
+
+  // Keep the viewed item's thumbnail in the middle of the filmstrip. Items arriving later shift it, so this
+  // also runs after insertions, unless the user scrolled the strip themselves in the last few seconds.
+  function centerStrip(smooth, force) {
+    const th = S.cur && S.cur.thumbEl;
+    if (!ui || !th || !th.isConnected || ui.viewer.hidden) return;
+    if (!force && Date.now() - S.stripTouched < 3000) return;
+    const strip = ui.strip;
+    strip.scrollTo({ left: th.offsetLeft - strip.clientWidth / 2 + th.offsetWidth / 2, behavior: smooth ? 'smooth' : 'auto' });
+  }
+
   function buildThumb(item) {
     const th = el('div', { className: 'xtg-th', title: tr('page', item.page) });
+    th.dataset.page = item.page;
+    th.dataset.kind = kindOf(item);
     if (item.type === 'image') {
-      const img = el('img', { loading: 'lazy', alt: '' });
-      loadImage(img, item, uniq([item.working, item.thumb, ...item.candidates]), () => markDead(item));
+      const img = el('img', { alt: '' });
+      lazyImage(img, item, uniq([item.working, item.thumb, ...item.candidates]), () => markDead(item));
       th.appendChild(img);
     } else {
       if (item.thumb) {
@@ -1896,11 +2080,27 @@ a.xtg-name:hover{text-decoration:underline}
     else renderStage();
   }
 
+  // First (-1) or last (+1) item of the current filter. In Grid / Scroll views this scrolls the list.
+  function jumpToEdge(dir) {
+    const list = visibleItems();
+    const target = dir < 0 ? list[0] : list[list.length - 1];
+    if (S.view !== 'viewer') {
+      ui.scroll.scrollTo({ top: dir < 0 ? 0 : ui.scroll.scrollHeight, behavior: 'smooth' });
+      if (target) S.cur = target;
+      scheduleStatus();
+      return;
+    }
+    if (!target || target === S.cur) return;
+    S.userMoved = true;
+    S.lastDir = dir;
+    showItem(target);
+  }
+
   // Move to the next live item in direction d; returns false at either end
   function step(d, byUser) {
     const from = S.cur ? S.items.indexOf(S.cur) : -1;
     for (let i = from + d; i >= 0 && i < S.items.length; i += d) {
-      if (S.items[i].dead) continue;
+      if (S.items[i].dead || !passesFilter(S.items[i])) continue;
       if (byUser) S.userMoved = true;
       S.lastDir = d;
       showItem(S.items[i]);
@@ -1915,7 +2115,7 @@ a.xtg-name:hover{text-decoration:underline}
     Z = { s: 1, x: 0, y: 0 };
     ui.stage.querySelectorAll('video').forEach((x) => x.pause());
     ui.stage.innerHTML = '';
-    ui.stage.classList.remove('zoomed');
+    ui.stage.classList.remove('zoomed', 'xtg-loading');
     clearTimeout(S.slideTimer);
     if (S.unwireVideo) { S.unwireVideo(); S.unwireVideo = null; }
     S.videoCtl = null;
@@ -1929,8 +2129,28 @@ a.xtg-name:hover{text-decoration:underline}
         (item.source ? `<a href="${esc(item.source)}" target="_blank" rel="noopener noreferrer">${esc(tr('openOriginal'))}</a>` : '') + '</div>';
     } else if (item.type === 'image') {
       const img = el('img', { alt: '', draggable: false });
-      loadImage(img, item, uniq([...item.candidates, item.working]), () => markDead(item));
+      img.fetchPriority = 'high';
       ui.stage.appendChild(img);
+      if (item.working) {
+        // the full image has loaded before: it comes straight from the browser cache
+        loadImage(img, item, uniq([item.working, ...item.candidates]), () => markDead(item), () => preloadAround(item));
+      } else {
+        // show the thumbnail already in the cache (blurred) with a spinner while the full image loads
+        if (item.shown) { img.src = item.shown; img.classList.add('xtg-preview'); }
+        ui.stage.classList.add('xtg-loading');
+        const full = new Image();
+        full.fetchPriority = 'high';
+        loadImage(full, item, uniq(item.candidates), () => {
+          if (S.cur === item) ui.stage.classList.remove('xtg-loading');
+          markDead(item);
+        }, (src) => {
+          if (S.cur !== item || !img.isConnected) return;
+          img.src = src;
+          img.classList.remove('xtg-preview');
+          ui.stage.classList.remove('xtg-loading');
+          preloadAround(item);
+        });
+      }
       addOverlay(item, img);
     } else if (item.type === 'video') {
       const v = mediaEl('video', { autoplay: true, muted: !!S.muted });
@@ -1952,15 +2172,10 @@ a.xtg-name:hover{text-decoration:underline}
     }
 
     S.items.forEach((i) => i.thumbEl && i.thumbEl.classList.toggle('on', i === item));
-    if (item.thumbEl) {
-      const s = ui.strip, th = item.thumbEl;
-      s.scrollTo({ left: th.offsetLeft - s.clientWidth / 2 + th.offsetWidth / 2, behavior: 'smooth' });
-    }
+    centerStrip(true, true);
     scheduleStatus();
 
-    // preload the next image
-    const next = S.items.slice(S.items.indexOf(item) + 1).find((i) => !i.dead);
-    if (next && next.type === 'image') el('img', { referrerPolicy: 'no-referrer', src: next.working || next.candidates[0] });
+    if (item.type !== 'image' && !item.dead) setTimeout(() => { if (S.cur === item) preloadAround(item); }, 1000);
     if (S.slideshow) scheduleSlide();
   }
 

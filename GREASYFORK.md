@@ -7,6 +7,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
 ## Features
 
 - **Whole thread, every page.** Click the **Album** button on any thread page. Pages are fetched in the background (one page at a time, with a short pause between pages so the forum is not overloaded) and media appears in thread order as it loads.
+- **Filter** all / images / videos, page indicator and page dividers in the filmstrip, jump to first / last.
 - **Three views**
   - **View**: one item at a time with a filmstrip. Arrow keys / swipe to navigate; click, mouse wheel or pinch to zoom; drag to pan.
   - **Grid**: all thumbnails at a glance.
@@ -40,6 +41,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
 | Key | Action |
 |---|---|
 | ← / → | Previous / next |
+| Home / End | First / last |
 | Space | Autoplay |
 | G | Toggle grid |
 | I | Toggle poster label |

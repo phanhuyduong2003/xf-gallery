@@ -19,10 +19,15 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 - Thông tin người đăng trên ảnh, giống video: trên máy tính hiện khi di chuột vào ảnh; trên điện thoại luôn hiện một dòng thu gọn (tên + một dòng nội dung), chạm để mở rộng.
 - Tiêu đề riêng cho từng mục trong bài có nhiều ảnh/video: mỗi mục hiện đoạn chữ nằm sát nó (tự nhận biết tiêu đề nằm trên hay dưới ảnh theo từng bài), vị trí trong bài ("2/5 trong bài") và nút *Xem cả bài*.
 - Tuỳ chọn riêng để hiện thông tin trên ảnh và trên video (mặc định đều bật). Phím **I** bật/tắt loại đang xem.
+- Bộ lọc Tất cả / Ảnh / Video, kèm số lượng, cạnh số thứ tự.
+- Nhãn trang ("Trang 2/3") và vạch chia trang trong dải ảnh; dải ảnh luôn giữ mục đang xem ở giữa.
+- Nút về mục đầu tiên / cuối cùng ở hai đầu dải ảnh, và phím **Home** / **End**.
+- Kéo dải ảnh bằng chuột, hoặc cuộn bằng con lăn chuột.
 
 ### Thay đổi
 - Tự động phát mặc định bật và ghi nhớ lựa chọn. Nút hiện ▶ khi tắt và biểu tượng tạm dừng khi bật.
 - Nút chuyển ảnh trước / sau không bao giờ che ảnh/video: trên máy tính nằm ở khoảng trống hai bên, trên điện thoại nằm ở hai đầu dải ảnh thu nhỏ.
+- Tải ảnh nhanh hơn mà nhẹ nhàng hơn với máy chủ: ảnh thu nhỏ chỉ tải khi hiện trên màn hình và tối đa 4 ảnh cùng lúc, ảnh đang mở được ưu tiên và hiện ảnh thu nhỏ đã có kèm vòng xoay cho tới khi ảnh lớn tải xong, ảnh kế bên được tải trước lần lượt từng ảnh.
 
 ## [2.1.1] - 2026-11-24
 
