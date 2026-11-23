@@ -95,6 +95,7 @@ The view is remembered. Other controls:
   - **Images, phone:** a compact line (name + one line of text) is always shown; tap it to expand.
   - **Posts with several images/videos:** each item shows the text right next to it instead of the whole post. If the post starts with text, captions are taken to sit above their item (items without their own text share the caption above); if it starts with an image and ends with text, captions are taken to sit below. *Whole post* shows the full post text. Posts with a single item show the whole post.
   - Quotes, bare links and the text of media links are removed from the text.
+  - While an image or video is still loading, the info and the tag stay hidden (only a spinner shows), so nothing gets in the way.
   - Press **I** to toggle the info for the kind being viewed (images or videos). While an image is zoomed, the tag and the info hide.
   - In Scroll view the info is a card above the item; in Grid view the poster's name appears on video tiles.
   - The thread starter is taken from the thread header, or from the author of the first post on page 1.

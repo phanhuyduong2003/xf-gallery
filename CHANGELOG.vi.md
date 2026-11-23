@@ -19,7 +19,7 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 -
 
 ### Thay đổi
--
+- Khi ảnh hoặc video còn đang tải, chỉ hiện vòng xoay: thông tin người đăng và nhãn Tác giả chủ đề / Thành viên hiện khi tải xong.
 
 ### Sửa lỗi
 -

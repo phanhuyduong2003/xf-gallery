@@ -929,6 +929,9 @@
 .xtg-strip.xtg-dragging{cursor:grabbing;scroll-behavior:auto}
 .xtg-strip.xtg-dragging .xtg-th{pointer-events:none}
 .xtg-stage>img.xtg-preview{width:100%;height:100%;object-fit:contain;filter:blur(6px) brightness(.85)}
+/* until the image/video has loaded, keep the poster info and the tag out of the way */
+.xtg-stage.xtg-loading .xtg-reel-info,.xtg-stage.xtg-loading .xtg-corner{opacity:0;visibility:hidden}
+.xtg-stage.xtg-loading .xtg-reel-img{pointer-events:none;background:transparent}
 .xtg-stage.xtg-loading::after{content:'';position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;z-index:2;
   border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:xtg-spin .8s linear infinite;pointer-events:none}
 @keyframes xtg-spin{to{transform:rotate(360deg)}}
@@ -2281,7 +2284,12 @@ a.xtg-name:hover{text-decoration:underline}
       ui.stage.appendChild(img);
       if (item.working) {
         // the full image has loaded before: it comes straight from the browser cache
-        loadImage(img, item, uniq([item.working, ...item.candidates]), () => markDead(item), (src) => { fillThumb(item, src); preloadAround(item); });
+        ui.stage.classList.add('xtg-loading');
+        loadImage(img, item, uniq([item.working, ...item.candidates]), () => markDead(item), (src) => {
+          if (img.isConnected) ui.stage.classList.remove('xtg-loading');
+          fillThumb(item, src);
+          preloadAround(item);
+        });
       } else {
         // show the thumbnail already in the cache (blurred) with a spinner while the full image loads
         if (item.shown) { img.src = item.shown; img.classList.add('xtg-preview'); }
@@ -2323,6 +2331,8 @@ a.xtg-name:hover{text-decoration:underline}
     } else if (item.type === 'video') {
       const v = mediaEl('video', { autoplay: true, muted: !!S.muted });
       if (item.thumb) v.poster = item.thumb;
+      ui.stage.classList.add('xtg-loading');
+      v.addEventListener('loadeddata', () => { if (v.isConnected) ui.stage.classList.remove('xtg-loading'); }, { once: true });
       loadVideo(v, item, () => videoFail(item));
       v.addEventListener('ended', () => { if (S.slideshow) nextOrStop(); });
       ui.stage.appendChild(v);

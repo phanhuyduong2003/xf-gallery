@@ -95,6 +95,7 @@ Kiểu xem được ghi nhớ cho lần sau. Các nút khác:
   - **Ảnh, trên điện thoại:** luôn hiện một dòng thu gọn (tên + một dòng nội dung); chạm vào để mở rộng.
   - **Bài có nhiều ảnh/video:** mỗi mục hiện đoạn chữ nằm sát nó thay vì cả bài. Nếu bài mở đầu bằng chữ, tiêu đề được hiểu là nằm trên ảnh (ảnh không có chữ riêng dùng chung tiêu đề phía trên); nếu bài mở đầu bằng ảnh và kết thúc bằng chữ, tiêu đề được hiểu là nằm dưới ảnh. *Xem cả bài* để đọc toàn bộ nội dung. Bài chỉ có một mục thì hiện cả bài.
   - Nội dung đã bỏ phần trích dẫn, link trần và chữ của link ảnh/video.
+  - Khi ảnh hoặc video còn đang tải, thông tin và nhãn được ẩn (chỉ hiện vòng xoay) để không vướng thao tác.
   - Phím **I** bật/tắt thông tin của loại đang xem (ảnh hoặc video). Khi đang phóng to ảnh, nhãn và thông tin tự ẩn.
   - Ở chế độ Cuộn, thông tin hiện thành thẻ phía trên mục; ở chế độ Lưới, tên người đăng hiện ở góc ô video.
   - Tác giả chủ đề được lấy từ dòng thông tin đầu chủ đề, hoặc từ người viết bài đầu tiên của trang 1.

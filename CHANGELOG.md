@@ -19,7 +19,7 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 -
 
 ### Changed
--
+- While an image or video is still loading, only the spinner is shown: the poster info and the Thread starter / Member tag appear once it has loaded.
 
 ### Fixed
 -
