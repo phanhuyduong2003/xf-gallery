@@ -58,14 +58,14 @@ Violentmonkey không hiện hộp thoại này: script khai báo `@connect *` đ
 
 ## Sử dụng
 
-Bấm nút **Album** để mở album dạng modal ngay trên trang (trang diễn đàn vẫn mờ phía sau). Script đọc mọi trang của chủ đề (tải 2 trang một lúc) và thêm ảnh/video dần theo đúng thứ tự bài viết. Bấm ảnh/video trong bài viết vẫn hoạt động như bình thường của diễn đàn.
+Bấm nút **Album** để mở album dạng modal ngay trên trang (trang diễn đàn vẫn mờ phía sau). Script đọc mọi trang của chủ đề (từng trang một, nghỉ khoảng 1–2 giây giữa các trang để không làm quá tải diễn đàn) và thêm ảnh/video dần theo đúng thứ tự bài viết. Bấm ảnh/video trong bài viết vẫn hoạt động như bình thường của diễn đàn.
 
 Trong modal có 3 kiểu xem:
 
 - **Xem** (mặc định): ảnh lớn ở giữa, dải ảnh thu nhỏ ở dưới để nhảy nhanh tới ảnh khác.
   - Chuyển ảnh: phím ← →, nút ‹ ›, hoặc vuốt ngang trên điện thoại.
   - Phóng to: bấm chuột trái vào ảnh (bấm lần nữa để thu lại), lăn chuột, hoặc chụm hai ngón. Khi đang phóng to thì kéo để di chuyển. Chuột phải vẫn mở menu bình thường (lưu ảnh, sao chép…), không phóng to.
-  - **Trình chiếu** (phím Space): tự chuyển ảnh sau 3,5 giây; với video thì chờ phát xong.
+  - **Tự động phát** (phím Space): tự chuyển ảnh sau 3,5 giây; với video thì chờ phát xong.
   - **Video** dùng thanh điều khiển kiểu Reels nằm sát mép dưới video, ngay dưới thông tin người đăng: nút phát/tạm dừng, thời gian, tắt tiếng, toàn màn hình và thanh tiến trình mảnh (bấm hoặc kéo để tua).
     - Bấm vào video để phát/tạm dừng, bấm đúp để xem toàn màn hình. Phím tắt: **K** phát/tạm dừng, **M** tắt tiếng, **F** toàn màn hình.
     - Mặc định video chỉ hiện thanh thời gian thu gọn ở mép dưới, không che nội dung.

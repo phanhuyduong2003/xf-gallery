@@ -4,7 +4,7 @@
 // @namespace        xenforo-thread-gallery
 // @author           Dylan Phan
 // @version          2.0.0
-// @description      Collects every image and video across all pages of a XenForo thread into one seamless gallery: viewer, grid and scroll modes, Reels-style video player, poster labels, resolves image-host links (Chevereto, Imgur, Streamable…) and skips dead media.
+// @description      Collects every image and video across all pages of a XenForo thread into one seamless gallery: viewer, grid and scroll modes, autoplay, Reels-style video player, poster labels, resolves image-host links (Chevereto, Imgur, Streamable…) and skips dead media.
 // @description:vi   Gom toàn bộ ảnh và video qua mọi trang của một chủ đề XenForo thành một album xem liền mạch: xem từng ảnh, lưới, cuộn dọc, trình phát video kiểu Reels, nhãn người đăng, tự lấy file thật từ link dịch vụ ảnh (Chevereto, Imgur, Streamable…) và bỏ qua ảnh/video đã chết.
 // @license          MIT
 // @icon             data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231f6feb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 22H4a2 2 0 0 1-2-2V6'/%3E%3Cpath d='m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18'/%3E%3Ccircle cx='12' cy='8' r='2'/%3E%3Crect width='16' height='16' x='6' y='2' rx='2'/%3E%3C/svg%3E
@@ -44,8 +44,11 @@
     'pixhost.to', 'imagebam.com', 'imgbox.com', 'imagetwist.com', 'lensdump.com',
     'jpg.church', 'jpg.pet', 'jpg5.su', 'imgchest.com', 'pixeldrain.com',
   ];
-  const PAGE_CONCURRENCY = 2;      // thread pages fetched at once
-  const RESOLVE_CONCURRENCY = 4;   // external links resolved at once
+  // Kept deliberately slow so the forum and image hosts are not hammered (and do not block you)
+  const PAGE_CONCURRENCY = 1;      // thread pages fetched at once
+  const PAGE_DELAY_MS = 1200;      // pause between thread pages…
+  const PAGE_JITTER_MS = 600;      // …plus a random extra, so requests are not perfectly regular
+  const RESOLVE_CONCURRENCY = 2;   // external links resolved at once
   const THUMB_CONCURRENCY = 2;     // video thumbnails looked up at once
   const SLIDE_MS = 3500;           // slideshow delay for images
   const SLIDE_EMBED_MS = 15000;    // slideshow delay for embedded players
@@ -66,13 +69,13 @@
       menuOpen: 'Open thread gallery',
       menuHosts: 'Edit image host list',
       dialog: 'Thread gallery',
-      slideshow: 'Slideshow', slideshowTip: 'Slideshow (Space)',
+      slideshow: 'Autoplay', slideshowShort: 'Auto', slideshowTip: 'Autoplay (Space)',
       post: 'Post', postTip: 'Open the post containing this item',
       source: 'Source', sourceTip: 'Open the original link',
       view: 'View', viewTip: 'One at a time',
       grid: 'Grid', gridTip: 'Thumbnail grid (G)',
       scroll: 'Scroll', scrollTip: 'Vertical scroll',
-      stop: 'Stop', stopTip: 'Stop loading the remaining pages',
+      stop: 'Stop loading', stopShort: 'Stop', stopTip: 'Stop loading the remaining pages',
       options: 'Options', close: 'Close (Esc)', prev: 'Previous (←)', next: 'Next (→)',
       optLabel: 'Show poster info on videos (I)',
       optLabelImg: 'Show poster info on images too',
@@ -105,13 +108,13 @@
       menuOpen: 'Mở album chủ đề',
       menuHosts: 'Sửa danh sách dịch vụ ảnh',
       dialog: 'Album ảnh và video',
-      slideshow: 'Trình chiếu', slideshowTip: 'Trình chiếu (Space)',
+      slideshow: 'Tự động phát', slideshowShort: 'Tự động', slideshowTip: 'Tự động phát (Space)',
       post: 'Bài gốc', postTip: 'Mở bài viết chứa mục này',
       source: 'Nguồn', sourceTip: 'Mở link gốc',
       view: 'Xem', viewTip: 'Xem từng ảnh',
       grid: 'Lưới', gridTip: 'Lưới ảnh thu nhỏ (G)',
       scroll: 'Cuộn', scrollTip: 'Cuộn dọc',
-      stop: 'Dừng tải', stopTip: 'Dừng tải các trang còn lại',
+      stop: 'Dừng tải', stopShort: 'Dừng', stopTip: 'Dừng tải các trang còn lại',
       options: 'Tuỳ chọn', close: 'Đóng (Esc)', prev: 'Trước (←)', next: 'Sau (→)',
       optLabel: 'Hiện nhãn người đăng trên video (phím I)',
       optLabelImg: 'Hiện nhãn người đăng cả trên ảnh',
@@ -171,7 +174,9 @@
   const ICONS = {
     play: '<polygon points="6 3 20 12 6 21 6 3"/>',
     pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
-    ext: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+    post: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    slides: '<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>',
     image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
     images: '<path d="M18 22H4a2 2 0 0 1-2-2V6"/><path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"/><circle cx="12" cy="8" r="2"/><rect width="16" height="16" x="6" y="2" rx="2"/>',
     grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
@@ -466,7 +471,9 @@
       const r = await fetch(url, { credentials: 'include' });
       if (r.ok) return parseHTML(await r.text());
       if (r.status !== 429 && r.status < 500) throw new Error('HTTP ' + r.status);
-      await sleep(2500 * (i + 1)); // rate limited / server error: back off and retry
+      // rate limited / server error: honour Retry-After when given, otherwise back off progressively
+      const retryAfter = parseInt(r.headers.get('Retry-After'), 10);
+      await sleep(retryAfter > 0 ? Math.min(retryAfter, 120) * 1000 : 5000 * (i + 1));
     }
     throw new Error('too many retries');
   }
@@ -647,18 +654,22 @@
 .xtg-modal{position:relative;width:min(1500px,calc(100vw - 48px));height:calc(100vh - 48px);background:#121317;border-radius:12px;
   box-shadow:0 24px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden;transform:scale(.97);transition:transform .18s}
 .xtg-open .xtg-modal{transform:none}
-.xtg-top{display:flex;align-items:center;gap:4px;padding:7px 8px 7px 16px;border-bottom:1px solid #24262c;flex-wrap:wrap}
+.xtg-top{position:relative;display:flex;align-items:center;gap:4px 8px;padding:7px 8px 7px 16px;border-bottom:1px solid #24262c;flex-wrap:wrap}
+.xtg-head{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0}
+.xtg-tools{display:flex;align-items:center;gap:2px}
+.xtg-sep{width:1px;height:20px;background:#2a2d33;margin:0 4px}
+.xtg-short{display:none}
 .xtg-counter{font-weight:600;min-width:60px;font-variant-numeric:tabular-nums}
-.xtg-status{color:#8b9097;font-size:12.5px;margin-left:6px}
+.xtg-status{color:#8b9097;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .xtg-grow{flex:1}
 .xtg-ib{height:32px;min-width:32px;padding:0 9px;border:0;border-radius:7px;background:transparent;color:#d6d9de;
   font:13px system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;text-decoration:none;white-space:nowrap}
 .xtg-ib:hover{background:#25282e;color:#fff}
 .xtg-ib.on{background:#1f6feb;color:#fff}
 .xtg-ib[hidden]{display:none}
-.xtg-seg{display:inline-flex;background:#1b1d22;border-radius:8px;padding:2px;margin:0 4px}
+.xtg-seg{display:inline-flex;background:#1b1d22;border-radius:8px;padding:2px}
 .xtg-seg .xtg-ib{height:28px}
-.xtg-menu{position:absolute;right:8px;top:46px;z-index:5;background:#1b1d22;border:1px solid #2c2f36;border-radius:10px;padding:6px;
+.xtg-menu{position:absolute;right:8px;top:calc(100% + 4px);z-index:5;background:#1b1d22;border:1px solid #2c2f36;border-radius:10px;padding:6px;
   box-shadow:0 10px 30px rgba(0,0,0,.5);min-width:260px}
 .xtg-menu[hidden]{display:none}
 .xtg-menu label,.xtg-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:0;border-radius:6px;background:none;
@@ -679,6 +690,7 @@
 .xtg-nav{display:flex;align-items:center;justify-content:center;position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;
   border-radius:999px;border:0;background:rgba(30,32,36,.72);color:#fff;cursor:pointer;z-index:4}
 .xtg-nav:hover{background:rgba(60,63,70,.92)}
+.xtg-nav:disabled{opacity:.25;pointer-events:none}
 .xtg-prev{left:12px}.xtg-next{right:12px}
 .xtg-strip{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;border-top:1px solid #24262c;background:#0f1013;
   scrollbar-width:thin;scrollbar-color:#3a3d44 transparent;min-height:72px}
@@ -771,8 +783,24 @@ a.xtg-name:hover{text-decoration:underline}
 @media (max-width:700px){
   .xtg-modal{width:100vw;height:100vh;height:100dvh;border-radius:0}
   .xtg-grid{grid-template-columns:repeat(auto-fill,minmax(105px,1fr))}
-  .xtg-nav{display:none}
-  .xtg-lbl{display:none}
+  .xtg-nav{width:38px;height:38px;background:rgba(20,22,26,.55)}
+  .xtg-nav .xtg-i{width:22px;height:22px}
+  .xtg-prev{left:6px}.xtg-next{right:6px}
+  /* toolbar: row 1 = counter, status, stop, close; row 2 = labelled tools, icon above label */
+  .xtg-top{padding:4px 4px 0 12px;gap:0}
+  .xtg-head{order:1;height:40px}
+  .xtg-close{order:2;width:40px;height:40px}
+  .xtg-head .xtg-ib{height:28px;padding:0 8px;font-size:12px}
+  .xtg-tools{order:3;flex:1 0 100%;margin:0 -4px 0 -12px;padding:4px 4px 6px;gap:0;border-top:1px solid #24262c;
+    overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .xtg-tools::-webkit-scrollbar{display:none}
+  .xtg-seg{display:contents}
+  .xtg-tools .xtg-ib{flex:1 0 auto;min-width:50px;height:auto;flex-direction:column;gap:3px;padding:6px 4px;font-size:10.5px;line-height:1.1}
+  .xtg-tools .xtg-ib.on{background:rgba(31,111,235,.18);color:#7fb0ff}
+  .xtg-sep{height:30px;margin:0 2px;flex:0 0 1px}
+  .xtg-long{display:none}
+  .xtg-short{display:inline}
+  .xtg-menu{left:8px;right:8px;min-width:0}
 }`;
 
   // ---------------------------------------------------------------------------
@@ -780,31 +808,39 @@ a.xtg-name:hover{text-decoration:underline}
   // ---------------------------------------------------------------------------
   function buildUI() {
     const root = el('div', { id: 'xtg-root', hidden: true });
-    const btn = (attrs, icon, label, tip) =>
-      `<button class="xtg-ib" ${attrs} title="${esc(tip)}">${icon}${label ? `<span class="xtg-lbl">${esc(label)}</span>` : ''}</button>`;
+    // label: always shown; short: replaces the label on narrow screens
+    const labels = (label, short) => (short
+      ? `<span class="xtg-lbl xtg-long">${esc(label)}</span><span class="xtg-lbl xtg-short">${esc(short)}</span>`
+      : (label ? `<span class="xtg-lbl">${esc(label)}</span>` : ''));
+    const btn = (attrs, icon, label, tip, short) =>
+      `<button class="xtg-ib" ${attrs} title="${esc(tip)}" aria-label="${esc(label || tip)}">${icon}${labels(label, short)}</button>`;
     root.innerHTML = `
       <div class="xtg-modal" role="dialog" aria-label="${esc(tr('dialog'))}">
         <div class="xtg-top">
-          <span class="xtg-counter">0 / 0</span>
-          <span class="xtg-status"></span>
-          <span class="xtg-grow"></span>
-          ${btn('data-act="play"', `<span class="xtg-pi">${ic('play', 16, true)}</span>`, tr('slideshow'), tr('slideshowTip'))}
-          <a class="xtg-ib" data-act="post" target="_blank" rel="noopener" title="${esc(tr('postTip'))}">${ic('ext', 15)}<span class="xtg-lbl">${esc(tr('post'))}</span></a>
-          <a class="xtg-ib" data-act="src" target="_blank" rel="noopener noreferrer" title="${esc(tr('sourceTip'))}">${ic('ext', 15)}<span class="xtg-lbl">${esc(tr('source'))}</span></a>
-          <span class="xtg-seg">
-            ${btn('data-view="viewer"', ic('image', 16), tr('view'), tr('viewTip'))}
-            ${btn('data-view="grid"', ic('grid', 16), tr('grid'), tr('gridTip'))}
-            ${btn('data-view="list"', ic('rows', 16), tr('scroll'), tr('scrollTip'))}
-          </span>
-          ${btn('data-act="stop"', ic('stop', 16), tr('stop'), tr('stopTip'))}
-          ${btn('data-act="menu"', ic('settings'), '', tr('options'))}
-          ${btn('data-act="close"', ic('x', 20), '', tr('close'))}
-        </div>
-        <div class="xtg-menu" hidden>
-          <label><input type="checkbox" data-opt="label"> ${esc(tr('optLabel'))}</label>
-          <label><input type="checkbox" data-opt="labelImages"> ${esc(tr('optLabelImg'))}</label>
-          <label><input type="checkbox" data-opt="dead"> ${esc(tr('optDead'))}</label>
-          <button data-act="hosts">${esc(tr('optHosts'))}</button>
+          <div class="xtg-head">
+            <span class="xtg-counter">0 / 0</span>
+            <span class="xtg-status"></span>
+            ${btn('data-act="stop"', ic('stop', 16), tr('stop'), tr('stopTip'), tr('stopShort'))}
+          </div>
+          <div class="xtg-tools">
+            <span class="xtg-seg">
+              ${btn('data-view="viewer"', ic('image', 16), tr('view'), tr('viewTip'))}
+              ${btn('data-view="grid"', ic('grid', 16), tr('grid'), tr('gridTip'))}
+              ${btn('data-view="list"', ic('rows', 16), tr('scroll'), tr('scrollTip'))}
+            </span>
+            <span class="xtg-sep"></span>
+            ${btn('data-act="play"', `<span class="xtg-pi">${ic('slides', 16)}</span>`, tr('slideshow'), tr('slideshowTip'), tr('slideshowShort'))}
+            <a class="xtg-ib" data-act="post" target="_blank" rel="noopener" title="${esc(tr('postTip'))}">${ic('post', 16)}<span class="xtg-lbl">${esc(tr('post'))}</span></a>
+            <a class="xtg-ib" data-act="src" target="_blank" rel="noopener noreferrer" title="${esc(tr('sourceTip'))}">${ic('link', 16)}<span class="xtg-lbl">${esc(tr('source'))}</span></a>
+            ${btn('data-act="menu"', ic('settings', 16), tr('options'), tr('options'))}
+          </div>
+          <button class="xtg-ib xtg-close" data-act="close" title="${esc(tr('close'))}" aria-label="${esc(tr('close'))}">${ic('x', 20)}</button>
+          <div class="xtg-menu" hidden>
+            <label><input type="checkbox" data-opt="label"> ${esc(tr('optLabel'))}</label>
+            <label><input type="checkbox" data-opt="labelImages"> ${esc(tr('optLabelImg'))}</label>
+            <label><input type="checkbox" data-opt="dead"> ${esc(tr('optDead'))}</label>
+            <button data-act="hosts">${esc(tr('optHosts'))}</button>
+          </div>
         </div>
         <div class="xtg-body">
           <div class="xtg-viewer">
@@ -824,7 +860,7 @@ a.xtg-name:hover{text-decoration:underline}
     ui = {
       root, modal: q('.xtg-modal'), counter: q('.xtg-counter'), status: q('.xtg-status'),
       playBtn: q('[data-act="play"]'), postLink: q('[data-act="post"]'), srcLink: q('[data-act="src"]'),
-      stopBtn: q('[data-act="stop"]'), menu: q('.xtg-menu'),
+      stopBtn: q('[data-act="stop"]'), menu: q('.xtg-menu'), prevBtn: q('.xtg-prev'), nextBtn: q('.xtg-next'),
       viewer: q('.xtg-viewer'), stage: q('.xtg-stage'), strip: q('.xtg-strip'),
       scroll: q('.xtg-scroll'), grid: q('.xtg-grid'), empty: q('.xtg-empty'),
     };
@@ -865,8 +901,8 @@ a.xtg-name:hover{text-decoration:underline}
       S.showDead = e.target.checked;
       ui.grid.classList.toggle('xtg-hide-dead', !S.showDead);
     });
-    q('.xtg-prev').onclick = () => step(-1, true);
-    q('.xtg-next').onclick = () => step(1, true);
+    ui.prevBtn.onclick = () => step(-1, true);
+    ui.nextBtn.onclick = () => step(1, true);
     new ResizeObserver(positionOverlay).observe(ui.stage);
     setupStageGestures();
     document.addEventListener('keydown', onKey, true);
@@ -933,7 +969,10 @@ a.xtg-name:hover{text-decoration:underline}
     if (S.pageErrors) st += tr('pageErrors', S.pageErrors);
     ui.status.textContent = st;
     ui.stopBtn.hidden = !loading;
-    ui.counter.textContent = `${S.cur && !S.cur.dead ? live.indexOf(S.cur) + 1 : 0} / ${live.length}`;
+    const pos = S.cur && !S.cur.dead ? live.indexOf(S.cur) : -1;
+    ui.counter.textContent = `${pos + 1} / ${live.length}`;
+    ui.prevBtn.disabled = pos <= 0;
+    ui.nextBtn.disabled = pos < 0 || pos >= live.length - 1;
     const msg = loading ? tr('searching') : tr('none');
     ui.empty.textContent = msg;
     ui.empty.style.display = live.length ? 'none' : '';
@@ -1681,7 +1720,7 @@ a.xtg-name:hover{text-decoration:underline}
     clearTimeout(S.slideTimer);
     if (!ui) return;
     ui.playBtn.classList.toggle('on', on);
-    ui.playBtn.querySelector('.xtg-pi').innerHTML = ic(on ? 'pause' : 'play', 16, true);
+    ui.playBtn.querySelector('.xtg-pi').innerHTML = on ? ic('pause', 16, true) : ic('slides', 16);
     if (on) scheduleSlide();
   }
   const toggleSlideshow = () => setSlideshow(!S.slideshow);
@@ -1712,7 +1751,7 @@ a.xtg-name:hover{text-decoration:underline}
       }
       S.pagesDone++;
       scheduleStatus();
-      if (p !== cur) await sleep(300); // be gentle with the forum
+      if (p !== cur) await sleep(PAGE_DELAY_MS + Math.random() * PAGE_JITTER_MS); // be gentle with the forum
     })));
     scheduleStatus();
   }

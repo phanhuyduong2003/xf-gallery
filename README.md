@@ -58,14 +58,14 @@ Violentmonkey does not show this dialog: scripts that declare `@connect *` may c
 
 ## Usage
 
-Click **Album** to open the gallery as a modal on top of the page (the forum stays dimmed behind it). The script reads every page of the thread (2 pages at a time) and adds images and videos in thread order as they load. Clicking images and videos inside posts keeps the forum's normal behaviour.
+Click **Album** to open the gallery as a modal on top of the page (the forum stays dimmed behind it). The script reads every page of the thread (one page at a time, pausing about 1–2 seconds between pages so the forum is not overloaded) and adds images and videos in thread order as they load. Clicking images and videos inside posts keeps the forum's normal behaviour.
 
 The modal has 3 views:
 
 - **View** (default): a large item in the middle, with a filmstrip below to jump to any other item.
   - Navigate: ← → keys, the ‹ › buttons, or a horizontal swipe on phones.
   - Zoom: left-click the image (click again to zoom out), use the mouse wheel, or pinch. Drag to pan while zoomed. Right-click still opens the normal context menu (save image, copy…) and does not zoom.
-  - **Slideshow** (Space): images advance every 3.5 seconds; videos advance when they end.
+  - **Autoplay** (Space): images advance every 3.5 seconds; videos advance when they end.
   - **Videos** use Reels-style controls along the bottom edge of the video, right below the poster info: play/pause, time, mute, fullscreen and a slim progress bar (click or drag to seek).
     - Click the video to play/pause, double-click for fullscreen. Shortcuts: **K** play/pause, **M** mute, **F** fullscreen.
     - By default only a slim time bar is shown along the bottom edge, so the video is not covered.

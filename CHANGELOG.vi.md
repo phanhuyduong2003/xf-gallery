@@ -16,13 +16,13 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
--
+- Nút chuyển ảnh/video trước / sau trên điện thoại. Trên mọi màn hình, nút tự mờ khi đang ở mục đầu hoặc cuối.
 
 ### Thay đổi
--
-
-### Sửa lỗi
--
+- Sắp xếp lại thanh công cụ: công cụ nào cũng hiện tên. Trên điện thoại chia 2 hàng: số thứ tự, trạng thái và nút đóng ở trên, hàng công cụ ở dưới với icon nằm trên tên.
+- Icon riêng cho Bài gốc, Nguồn và Tự động phát, không còn dễ nhầm với nhau hay với nút phát video.
+- Đổi tên "Trình chiếu" thành "Tự động phát".
+- Tải từ tốn hơn để tránh làm quá tải diễn đàn và bị chặn: tải từng trang một, nghỉ 1,2–1,8 giây giữa các trang, giảm số yêu cầu cùng lúc tới dịch vụ ảnh, và chờ đúng thời gian máy chủ yêu cầu khi bị giới hạn tốc độ (Retry-After).
 
 ## [2.0.0] - 2026-11-24
 
@@ -37,7 +37,7 @@ Phát hành công khai lần đầu trên Greasy Fork.
 - Trình phát video kiểu Reels: mặc định chỉ hiện thanh tiến trình mảnh; di chuột vào (máy tính) hoặc chạm để tạm dừng (điện thoại) để hiện thông tin người đăng và nút điều khiển.
 - Nhãn người đăng: nhãn Tác giả chủ đề / Thành viên ở góc trên trái, kèm ảnh đại diện, tên, ngày đăng và nội dung bài.
 - Tự tạo ảnh thu nhỏ cho video chưa có (chụp khung hình, oEmbed, API RedGifs, `og:image`).
-- Trình chiếu, phím tắt (← → Space G I K M F Esc).
+- Tự động phát, phím tắt (← → Space G I K M F Esc).
 - Giao diện tiếng Anh và tiếng Việt, tự chọn theo ngôn ngữ trình duyệt.
 
 ### Trước 2.0.0 (chưa công bố)

@@ -60,7 +60,7 @@ Không bắt buộc nhưng nên có. Scope cho biết phần nào của script b
 | `resolve` | Lấy file thật từ link (dịch vụ ảnh, Chevereto, Streamable, Imgur…) |
 | `thumb` | Ảnh thu nhỏ cho video |
 | `loader` | Tải các trang chủ đề, lọc trùng, ảnh/video chết |
-| `slideshow` | Trình chiếu |
+| `autoplay` | Tự động phát |
 | `i18n` | Chữ tiếng Anh / tiếng Việt |
 | `ui` | Thanh công cụ, modal, menu tuỳ chọn, style chung |
 | `meta` | Phần đầu userscript |

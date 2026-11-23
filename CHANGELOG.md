@@ -16,13 +16,13 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
--
+- Previous / next buttons on phones. On every screen they dim at the first and last item.
 
 ### Changed
--
-
-### Fixed
--
+- Reorganised toolbar: every tool now shows its name. On phones it uses two rows: counter, status and close on top, then a row of tools with the icon above the label.
+- Distinct icons for Post, Source and Autoplay, so they are no longer confused with each other or with the video play button.
+- "Slideshow" is renamed "Autoplay".
+- Gentler loading to avoid overloading forums and getting blocked: one thread page at a time with a 1.2–1.8 s pause between pages, fewer simultaneous requests to image hosts, and the server's Retry-After is respected when rate-limited.
 
 ## [2.0.0] - 2026-11-24
 
@@ -37,7 +37,7 @@ First public release on Greasy Fork.
 - Reels-style video player: slim progress bar by default; hover (desktop) or tap to pause (phone) to show poster info and controls.
 - Poster label: Thread starter / Member tag in the top-left corner, plus avatar, name, date and post text.
 - Automatic thumbnails for videos that have none (frame capture, oEmbed, RedGifs API, `og:image`).
-- Slideshow, keyboard shortcuts (← → Space G I K M F Esc).
+- Autoplay, keyboard shortcuts (← → Space G I K M F Esc).
 - English and Vietnamese interface, chosen from the browser language.
 
 ### Before 2.0.0 (unpublished)

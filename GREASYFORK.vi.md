@@ -6,7 +6,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 
 ## Tính năng
 
-- **Cả chủ đề, mọi trang.** Bấm nút **Album** trên trang chủ đề bất kỳ. Script tải ngầm các trang (từ tốn, 2 trang một lúc) và hiện ảnh/video theo đúng thứ tự bài viết trong lúc tải.
+- **Cả chủ đề, mọi trang.** Bấm nút **Album** trên trang chủ đề bất kỳ. Script tải ngầm các trang (từng trang một, nghỉ một chút giữa các trang để không làm quá tải diễn đàn) và hiện ảnh/video theo đúng thứ tự bài viết trong lúc tải.
 - **3 kiểu xem**
   - **Xem**: từng ảnh, kèm dải ảnh thu nhỏ. Phím mũi tên hoặc vuốt để chuyển; bấm, lăn chuột hoặc chụm 2 ngón để phóng to; kéo để di chuyển.
   - **Lưới**: toàn bộ ảnh thu nhỏ trong một màn hình.
@@ -29,7 +29,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
   - Ảnh đại diện, tên, ngày đăng và nội dung bài viết (đã bỏ phần trích dẫn và link trần).
   - Phím **I** để bật/tắt.
 - **Ảnh thu nhỏ cho video.** Video nào chưa có, script tự chụp một khung hình, hỏi qua oEmbed / RedGifs, hoặc đọc `og:image`.
-- **Trình chiếu** (phím Space). Ảnh tự chuyển sau 3,5 giây; video chuyển khi phát xong.
+- **Tự động phát** (phím Space). Ảnh tự chuyển sau 3,5 giây; video chuyển khi phát xong.
 - **Giao diện tiếng Việt và tiếng Anh**, tự chọn theo ngôn ngữ trình duyệt.
 - Nhẹ: không dùng thư viện ngoài. Icon là SVG của [Lucide](https://lucide.dev) (giấy phép ISC) nhúng sẵn.
 
@@ -38,7 +38,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 | Phím | Chức năng |
 |---|---|
 | ← / → | Ảnh trước / sau |
-| Space | Trình chiếu |
+| Space | Tự động phát |
 | G | Bật/tắt chế độ lưới |
 | I | Bật/tắt nhãn người đăng |
 | K / M / F | Video: phát-tạm dừng / tắt tiếng / toàn màn hình |

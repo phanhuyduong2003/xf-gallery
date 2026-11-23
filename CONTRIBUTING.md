@@ -58,7 +58,7 @@ Optional, but preferred. It names the part of the script that changed:
 | `resolve` | Turning links into media (hosts, Chevereto, Streamable, Imgur…) |
 | `thumb` | Video thumbnails |
 | `loader` | Fetching thread pages, de-duplication, dead media |
-| `slideshow` | Slideshow |
+| `autoplay` | Autoplay |
 | `i18n` | English / Vietnamese strings |
 | `ui` | Toolbar, modal, options menu, shared styles |
 | `meta` | Userscript header |

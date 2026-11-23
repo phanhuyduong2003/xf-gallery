@@ -6,7 +6,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
 
 ## Features
 
-- **Whole thread, every page.** Click the **Album** button on any thread page. Pages are fetched in the background (gently, 2 at a time) and media appears in thread order as it loads.
+- **Whole thread, every page.** Click the **Album** button on any thread page. Pages are fetched in the background (one page at a time, with a short pause between pages so the forum is not overloaded) and media appears in thread order as it loads.
 - **Three views**
   - **View**: one item at a time with a filmstrip. Arrow keys / swipe to navigate; click, mouse wheel or pinch to zoom; drag to pan.
   - **Grid**: all thumbnails at a glance.
@@ -29,7 +29,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
   - The poster's avatar, name, date and post text (quotes and bare links removed).
   - Press **I** to toggle.
 - **Video thumbnails.** When a video has none, the script captures a frame, asks oEmbed / RedGifs, or reads `og:image`.
-- **Slideshow** (Space). Images advance every 3.5 s; videos advance when they end.
+- **Autoplay** (Space). Images advance every 3.5 s; videos advance when they end.
 - **English and Vietnamese UI**, chosen automatically from your browser language.
 - Lightweight: no external libraries. Icons are inline [Lucide](https://lucide.dev) SVGs (ISC).
 
@@ -38,7 +38,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
 | Key | Action |
 |---|---|
 | ← / → | Previous / next |
-| Space | Slideshow |
+| Space | Autoplay |
 | G | Toggle grid |
 | I | Toggle poster label |
 | K / M / F | Video: play-pause / mute / fullscreen |
