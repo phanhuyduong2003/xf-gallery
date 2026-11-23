@@ -65,7 +65,8 @@ Trong modal có 3 kiểu xem:
 - **Xem** (mặc định): ảnh lớn ở giữa, dải ảnh thu nhỏ ở dưới để nhảy nhanh tới ảnh khác.
   - Chuyển ảnh: phím ← →, nút ‹ › (nằm hai bên ảnh trên máy tính, ở hai đầu dải ảnh thu nhỏ trên điện thoại, nên không bao giờ che ảnh), hoặc vuốt ngang trên điện thoại. Nút |« »| (hoặc phím **Home** / **End**) về mục đầu tiên / cuối cùng.
   - Dải ảnh luôn giữ mục đang xem ở giữa và có vạch chia trang ("Tr. 2"); thanh công cụ cho biết mục thuộc trang nào ("Trang 2/3"). Kéo dải ảnh bằng chuột (hoặc lăn chuột) để cuộn; bấm bình thường vẫn mở ảnh đó.
-  - **Bộ lọc** Tất cả / Ảnh / Video (kèm số lượng) cạnh số thứ tự: chuyển ảnh, tự động phát, dải ảnh và chế độ Lưới / Cuộn chỉ tính loại đã chọn.
+  - Nút **lọc** cạnh số thứ tự (Tất cả / Ảnh / Video, kèm số lượng): chuyển ảnh, tự động phát, dải ảnh và chế độ Lưới / Cuộn chỉ tính loại đã chọn.
+  - Thanh công cụ hiện số thứ tự kèm một dòng nhỏ bên dưới (trang, mục hỏng, tiến độ tải). Cửa sổ hẹp hơn khoảng 960 px và điện thoại dùng 2 hàng: số thứ tự, nút lọc và nút đóng ở trên, các công cụ có tên ở dưới.
   - Ảnh thu nhỏ chỉ tải khi hiện trên màn hình, tối đa 4 ảnh cùng lúc, nên ảnh bạn mở không phải chờ sau chúng. Trong lúc ảnh lớn đang tải, ảnh thu nhỏ (nếu đã có) hiện mờ kèm vòng xoay; sau đó ảnh kế trước / kế sau được tải trước lần lượt từng ảnh.
   - Phóng to: bấm chuột trái vào ảnh (bấm lần nữa để thu lại), lăn chuột, hoặc chụm hai ngón. Khi đang phóng to thì kéo để di chuyển. Chuột phải vẫn mở menu bình thường (lưu ảnh, sao chép…), không phóng to.
   - **Tự động phát** (phím Space), **mặc định bật**: tự chuyển ảnh sau 3,5 giây; với video thì chờ phát xong. Nút hiện ▶ khi tắt và biểu tượng tạm dừng khi bật; lựa chọn được ghi nhớ.

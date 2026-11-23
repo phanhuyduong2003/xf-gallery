@@ -65,7 +65,8 @@ The modal has 3 views:
 - **View** (default): a large item in the middle, with a filmstrip below to jump to any other item.
   - Navigate: ← → keys, the ‹ › buttons (beside the media on desktop, at both ends of the filmstrip on phones, so they never cover it), or a horizontal swipe on phones. |« »| (or **Home** / **End**) jump to the first / last item.
   - The filmstrip keeps the viewed item in the middle and shows page dividers ("p. 2"); the toolbar shows which page the item comes from ("Page 2/3"). Drag the filmstrip with the mouse (or use the mouse wheel) to scroll it; a plain click still opens a thumbnail.
-  - **Filter** All / Images / Videos (with counts) next to the counter: navigation, autoplay, the filmstrip and Grid / Scroll then only include that kind.
+  - **Filter** button next to the counter (All / Images / Videos, with counts): navigation, autoplay, the filmstrip and Grid / Scroll then only include that kind.
+  - The toolbar shows the counter with a small line below it (page, broken items, loading progress). Windows narrower than about 960 px and phones use two rows: counter, filter and close on top, the labelled tools below.
   - Thumbnails load only when visible, at most 4 at a time, so the item you open is not stuck behind them. While a full image loads, its thumbnail (if already loaded) is shown blurred with a spinner; the next and previous images are then preloaded one at a time.
   - Zoom: left-click the image (click again to zoom out), use the mouse wheel, or pinch. Drag to pan while zoomed. Right-click still opens the normal context menu (save image, copy…) and does not zoom.
   - **Autoplay** (Space), **on by default**: images advance every 3.5 seconds; videos advance when they end. The button shows ▶ when off and a pause icon when on; your choice is remembered.

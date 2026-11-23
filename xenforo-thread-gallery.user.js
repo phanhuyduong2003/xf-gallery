@@ -199,6 +199,8 @@
     settings: '<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>',
     x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     left: '<path d="m15 18-6-6 6-6"/>',
+    filter: '<path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
     first: '<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
     last: '<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
     right: '<path d="m9 18 6-6-6-6"/>',
@@ -793,25 +795,41 @@
   box-shadow:0 24px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden;transform:scale(.97);transition:transform .18s}
 .xtg-open .xtg-modal{transform:none}
 .xtg-top{position:relative;display:flex;align-items:center;gap:4px 8px;padding:7px 8px 7px 16px;border-bottom:1px solid #24262c;flex-wrap:wrap}
-.xtg-head{display:flex;align-items:center;gap:6px;flex:1 1 0;min-width:0}
+.xtg-head{display:flex;align-items:center;gap:12px;flex:1 1 0;min-width:0}
+.xtg-titleblock{display:flex;flex-direction:column;justify-content:center;min-width:0;line-height:1.25}
+.xtg-meta{display:flex;align-items:center;gap:6px;min-width:0;font-size:11.5px;color:#8b9097;white-space:nowrap}
+.xtg-meta:empty{display:none}
+.xtg-pageinfo:not(:empty) + .xtg-status:not(:empty)::before{content:'·';margin-right:6px}
+.xtg-stoplink{flex:0 0 auto;padding:0;border:0;background:none;color:#8fb8ff;font:600 11.5px system-ui,sans-serif;cursor:pointer}
+.xtg-stoplink:hover{text-decoration:underline}
+.xtg-stoplink[hidden]{display:none}
+.xtg-filterwrap{position:relative;flex:0 0 auto}
+.xtg-fbtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 8px 0 10px;border:1px solid #2c2f36;border-radius:8px;
+  background:#1b1d22;color:#d6d9de;font:12.5px system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.xtg-fbtn:hover{border-color:#3a3e46;color:#fff}
+.xtg-fbtn.on{border-color:#1f6feb;color:#fff}
+.xtg-fbtn b{font-weight:600;font-variant-numeric:tabular-nums;color:#fff}
+.xtg-fmenu{position:absolute;top:calc(100% + 4px);left:0;z-index:6;min-width:180px;padding:5px;background:#1b1d22;border:1px solid #2c2f36;
+  border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.xtg-fmenu[hidden]{display:none}
+.xtg-fmenu button{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:0;border-radius:6px;background:none;
+  color:#e0e3e7;font:13px system-ui,sans-serif;cursor:pointer;text-align:left}
+.xtg-fmenu button:hover{background:#262930}
+.xtg-fmenu button span{flex:1}
+.xtg-fmenu button b{font-weight:600;color:#9aa0a8;font-variant-numeric:tabular-nums}
+.xtg-fmenu button.on{color:#7fb0ff}
+.xtg-fmenu button.on b{color:#7fb0ff}
 .xtg-tools{display:flex;align-items:center;gap:2px}
 .xtg-sep{width:1px;height:20px;background:#2a2d33;margin:0 4px}
 .xtg-short{display:none}
-.xtg-counter{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
-.xtg-pageinfo{flex:0 0 auto;font-size:12px;color:#d6d9de;background:#22252b;border-radius:6px;padding:2px 7px;white-space:nowrap}
+.xtg-counter{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.xtg-pageinfo{flex:0 0 auto;color:#c4c8ce}
 .xtg-pageinfo:empty{display:none}
-.xtg-filter{flex:0 0 auto;display:inline-flex;gap:2px;padding:2px;background:#1b1d22;border-radius:7px}
-.xtg-fb{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:0;border-radius:5px;background:none;
-  color:#9aa0a8;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap}
-.xtg-fb:hover{color:#fff}
-.xtg-fb b{font-weight:600;color:#d6d9de;font-variant-numeric:tabular-nums}
-.xtg-fb.on{background:#2c3038;color:#fff}
-.xtg-fb.on b{color:#fff}
 .xtg-f-image [data-kind="video"],.xtg-f-video [data-kind="image"]{display:none}
 .xtg-pdiv{flex:0 0 auto;align-self:center;padding:2px 6px 2px 8px;margin-left:2px;border-left:1px solid #33363d;
   font-size:11px;color:#9aa0a8;white-space:nowrap}
 .xtg-pdiv:first-child{border-left:0;margin-left:0;padding-left:2px}
-.xtg-status{color:#8b9097;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.xtg-status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .xtg-grow{flex:1}
 .xtg-ib{height:32px;min-width:32px;padding:0 9px;border:0;border-radius:7px;background:transparent;color:#d6d9de;
   font:13px system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;text-decoration:none;white-space:nowrap}
@@ -964,6 +982,21 @@ a.xtg-name:hover{text-decoration:underline}
 .xtg-post{width:100%;max-width:960px;padding:10px 12px;background:#1a1c21;border-radius:8px 8px 0 0;color:#e8e8ea}
 .xtg-post .xtg-av{border-color:#3a3d44}
 .xtg-post .xtg-text{text-shadow:none}
+@media (max-width:960px){
+  /* narrower windows and phones: row 1 = counter + meta, filter, close; row 2 = labelled tools, icon above label */
+  .xtg-top{padding:4px 4px 0 12px;gap:0}
+  .xtg-head{order:1;min-height:46px;gap:10px}
+  .xtg-close{order:2;width:40px;height:40px}
+  .xtg-fbtn{height:32px}
+  .xtg-fmenu{left:auto;right:0}
+  .xtg-tools{order:3;flex:1 0 100%;margin:0 -4px 0 -12px;padding:4px 4px 6px;gap:0;border-top:1px solid #24262c;
+    overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .xtg-tools::-webkit-scrollbar{display:none}
+  .xtg-seg{display:contents}
+  .xtg-tools .xtg-ib{flex:1 0 auto;min-width:50px;height:auto;flex-direction:column;gap:3px;padding:6px 4px;font-size:10.5px;line-height:1.1}
+  .xtg-tools .xtg-ib.on{background:rgba(31,111,235,.18);color:#7fb0ff}
+  .xtg-sep{height:30px;margin:0 2px;flex:0 0 1px}
+}
 @media (max-width:700px){
   .xtg-modal{width:100vw;height:100vh;height:100dvh;border-radius:0}
   .xtg-grid{grid-template-columns:repeat(auto-fill,minmax(105px,1fr))}
@@ -976,21 +1009,6 @@ a.xtg-name:hover{text-decoration:underline}
   .xtg-snav:active{background:#1b1d22}
   .xtg-snav:disabled{opacity:.25;pointer-events:none}
   .xtg-strip{padding:8px 2px}
-  /* toolbar: row 1 = counter, status, stop, close; row 2 = labelled tools, icon above label */
-  .xtg-top{padding:4px 4px 0 12px;gap:0}
-  .xtg-head{order:1;height:40px}
-  .xtg-close{order:2;width:40px;height:40px}
-  .xtg-head .xtg-ib{height:28px;padding:0 8px;font-size:12px}
-  .xtg-head{gap:5px}
-  .xtg-fb{padding:0 6px}
-  .xtg-fb .xtg-i{display:none}
-  .xtg-tools{order:3;flex:1 0 100%;margin:0 -4px 0 -12px;padding:4px 4px 6px;gap:0;border-top:1px solid #24262c;
-    overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-  .xtg-tools::-webkit-scrollbar{display:none}
-  .xtg-seg{display:contents}
-  .xtg-tools .xtg-ib{flex:1 0 auto;min-width:50px;height:auto;flex-direction:column;gap:3px;padding:6px 4px;font-size:10.5px;line-height:1.1}
-  .xtg-tools .xtg-ib.on{background:rgba(31,111,235,.18);color:#7fb0ff}
-  .xtg-sep{height:30px;margin:0 2px;flex:0 0 1px}
   .xtg-long{display:none}
   .xtg-short{display:inline}
   .xtg-menu{left:8px;right:8px;min-width:0}
@@ -1011,15 +1029,24 @@ a.xtg-name:hover{text-decoration:underline}
       <div class="xtg-modal" role="dialog" aria-label="${esc(tr('dialog'))}">
         <div class="xtg-top">
           <div class="xtg-head">
-            <span class="xtg-counter">0 / 0</span>
-            <span class="xtg-pageinfo"></span>
-            <span class="xtg-filter" role="group" title="${esc(tr('filterTip'))}">
-              <button class="xtg-fb" data-filter="all"><span>${esc(tr('fAll'))}</span><b>0</b></button>
-              <button class="xtg-fb" data-filter="image">${ic('image', 13)}<span>${esc(tr('fImages'))}</span><b>0</b></button>
-              <button class="xtg-fb" data-filter="video">${ic('video', 13)}<span>${esc(tr('fVideos'))}</span><b>0</b></button>
-            </span>
-            <span class="xtg-status"></span>
-            ${btn('data-act="stop"', ic('stop', 16), tr('stop'), tr('stopTip'), tr('stopShort'))}
+            <div class="xtg-titleblock">
+              <span class="xtg-counter">0 / 0</span>
+              <div class="xtg-meta">
+                <span class="xtg-pageinfo"></span>
+                <span class="xtg-status"></span>
+                <button class="xtg-stoplink" data-act="stop" title="${esc(tr('stopTip'))}">${esc(tr('stopShort'))}</button>
+              </div>
+            </div>
+            <div class="xtg-filterwrap">
+              <button class="xtg-fbtn" data-act="filter" title="${esc(tr('filterTip'))}" aria-haspopup="true">
+                ${ic('filter', 15)}<span class="xtg-fcur"></span><b class="xtg-fcount">0</b>${ic('down', 14)}
+              </button>
+              <div class="xtg-fmenu" hidden>
+                <button data-filter="all">${ic('images', 15)}<span>${esc(tr('fAll'))}</span><b>0</b></button>
+                <button data-filter="image">${ic('image', 15)}<span>${esc(tr('fImages'))}</span><b>0</b></button>
+                <button data-filter="video">${ic('video', 15)}<span>${esc(tr('fVideos'))}</span><b>0</b></button>
+              </div>
+            </div>
           </div>
           <div class="xtg-tools">
             <span class="xtg-seg">
@@ -1068,7 +1095,8 @@ a.xtg-name:hover{text-decoration:underline}
     ui = {
       root, modal: q('.xtg-modal'), counter: q('.xtg-counter'), pageInfo: q('.xtg-pageinfo'), status: q('.xtg-status'),
       playBtn: q('[data-act="play"]'), postLink: q('[data-act="post"]'), srcLink: q('[data-act="src"]'),
-      stopBtn: q('[data-act="stop"]'), menu: q('.xtg-menu'),
+      stopBtn: q('[data-act="stop"]'), menu: q('.xtg-menu'), fmenu: q('.xtg-fmenu'),
+      fcur: q('.xtg-fcur'), fcount: q('.xtg-fcount'),
       prevBtns: root.querySelectorAll('.xtg-prev, .xtg-sprev'), nextBtns: root.querySelectorAll('.xtg-next, .xtg-snext'),
       firstBtn: q('.xtg-first'), lastBtn: q('.xtg-last'),
       viewer: q('.xtg-viewer'), stage: q('.xtg-stage'), strip: q('.xtg-strip'),
@@ -1087,8 +1115,9 @@ a.xtg-name:hover{text-decoration:underline}
       }
       if (e.target === root) { closeGallery(); return; } // click on the backdrop
       if (!e.target.closest('.xtg-menu, [data-act="menu"]')) ui.menu.hidden = true;
+      if (!e.target.closest('.xtg-filterwrap')) ui.fmenu.hidden = true;
       const filterBtn = e.target.closest('[data-filter]');
-      if (filterBtn) { setFilter(filterBtn.getAttribute('data-filter')); return; }
+      if (filterBtn) { ui.fmenu.hidden = true; setFilter(filterBtn.getAttribute('data-filter')); return; }
       const viewBtn = e.target.closest('[data-view]');
       if (viewBtn) { setView(viewBtn.getAttribute('data-view')); return; }
       const act = e.target.closest('[data-act]');
@@ -1096,7 +1125,8 @@ a.xtg-name:hover{text-decoration:underline}
         case 'close': closeGallery(); break;
         case 'stop': S.stopped = true; scheduleStatus(); break;
         case 'play': toggleSlideshow(); break;
-        case 'menu': ui.menu.hidden = !ui.menu.hidden; break;
+        case 'menu': ui.menu.hidden = !ui.menu.hidden; ui.fmenu.hidden = true; break;
+        case 'filter': ui.fmenu.hidden = !ui.fmenu.hidden; ui.menu.hidden = true; break;
         case 'hosts': ui.menu.hidden = true; editHosts(); break;
         case 'reload': reloadThread(); break;
         default: break;
@@ -1161,7 +1191,7 @@ a.xtg-name:hover{text-decoration:underline}
     if (!ui || ui.root.hidden || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (k === 'Escape') {
-      if (!ui.menu.hidden) ui.menu.hidden = true; else closeGallery();
+      if (!ui.menu.hidden || !ui.fmenu.hidden) { ui.menu.hidden = true; ui.fmenu.hidden = true; } else closeGallery();
       e.preventDefault();
       return;
     }
@@ -1211,6 +1241,8 @@ a.xtg-name:hover{text-decoration:underline}
     ui.root.classList.toggle('xtg-f-image', f === 'image');
     ui.root.classList.toggle('xtg-f-video', f === 'video');
     ui.root.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('on', b.getAttribute('data-filter') === f));
+    ui.fcur.textContent = tr({ all: 'fAll', image: 'fImages', video: 'fVideos' }[f]);
+    ui.root.querySelector('.xtg-fbtn').classList.toggle('on', f !== 'all');
     if (S.cur && !passesFilter(S.cur)) {
       // jump to the nearest item of the chosen kind, preferring the ones after the current item
       const i = S.items.indexOf(S.cur);
@@ -1236,6 +1268,7 @@ a.xtg-name:hover{text-decoration:underline}
     for (const i of all) if (i.type === 'image') images++;
     const counts = { all: all.length, image: images, video: all.length - images };
     ui.root.querySelectorAll('[data-filter]').forEach((b) => { b.querySelector('b').textContent = counts[b.getAttribute('data-filter')]; });
+    ui.fcount.textContent = counts[S.filter];
     const live = visibleItems();
     const dead = S.items.length - all.length;
     const loading = isLoading();
