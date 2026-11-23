@@ -16,7 +16,8 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
   - Tệp đính kèm của diễn đàn (bản đầy đủ, không phải ảnh thu nhỏ), ảnh tải chậm và ảnh qua proxy.
   - Link thẳng tới `.jpg .png .gif .webp .mp4 .webm …`.
   - Các dịch vụ Chevereto (anh.moe, ibb.co, jpg.church…), kể cả album.
-  - Streamable (lấy thẳng file MP4 qua API), Imgur, YouTube, Vimeo, RedGifs, TikTok.
+  - Streamable và RedGifs (lấy thẳng file MP4 qua API, bản nhẹ khi mạng chậm), Imgur, YouTube, Vimeo, TikTok.
+  - Ảnh Imgur và Chevereto dùng các cỡ nhỏ hơn của dịch vụ cho ảnh thu nhỏ và trong lúc ảnh gốc tải chậm.
   - Dịch vụ khác do bạn thêm vào danh sách: script đọc thẻ `og:image` / `og:video` của trang.
 - **Bỏ qua ảnh/video đã chết.** Link hỏng, lỗi 404 và ảnh giữ chỗ "đã bị xoá" được ẩn đi (có thể bật lại trong tuỳ chọn). Ảnh bị chặn hotlink được tải qua trình quản lý userscript. Lỗi mạng chập chờn được thử lại một lần.
 - **Không trùng lặp.** Ảnh bị trích dẫn lại ở các bài sau chỉ hiện một lần.

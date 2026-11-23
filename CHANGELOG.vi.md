@@ -16,13 +16,14 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
--
+- Nâng dần cỡ ảnh cho Imgur và Chevereto: dải ảnh dùng bản nhỏ, chế độ Lưới dùng bản vừa, và hiện tạm bản vừa khi ảnh gốc sau 0,8 giây vẫn đang tải.
+- Video nhẹ hơn khi mạng chậm hoặc bật tiết kiệm dữ liệu: bản điện thoại của Streamable và bản SD của RedGifs. RedGifs giờ phát thẳng trong trình phát kiểu Reels, không được thì dùng trình phát nhúng.
 
 ### Thay đổi
--
+- Mục mở đầu được chọn khi trang đang đọc xử lý xong (tối đa khoảng 1,5 giây), nên không còn nhảy khi một link ở đầu trang xử lý xong muộn.
 
 ### Sửa lỗi
--
+- Ảnh thu nhỏ ở dải ảnh không hiện khi tự động phát: ảnh thu nhỏ đã trôi khỏi tầm nhìn không còn chiếm chỗ trong hàng đợi, và ảnh lớn đã tải cũng được dùng cho ô thu nhỏ của nó.
 
 ## [2.2.0] - 2026-11-24
 

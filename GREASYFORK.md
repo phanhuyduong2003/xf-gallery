@@ -16,7 +16,8 @@ Long XenForo threads often hide their images and videos between pages of text, a
   - Forum attachments (full size, not the thumbnail), lazy-loaded and proxied images.
   - Direct links to `.jpg .png .gif .webp .mp4 .webm …`.
   - Chevereto hosts (anh.moe, ibb.co, jpg.church…), including whole albums.
-  - Streamable (native MP4 via the API), Imgur, YouTube, Vimeo, RedGifs, TikTok.
+  - Streamable and RedGifs (native MP4 via their APIs, lighter version on slow connections), Imgur, YouTube, Vimeo, TikTok.
+  - Imgur and Chevereto images use the host's smaller sizes for thumbnails and while a slow full image loads.
   - Any other host you add: the script reads the page's `og:image` / `og:video`.
 - **Skips dead media.** Broken links, 404s and "image removed" placeholders are hidden (you can show them from the options). Hotlink-protected images are fetched through the userscript manager. Transient network errors are retried once.
 - **No duplicates.** Images quoted again later only appear once.

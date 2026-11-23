@@ -16,13 +16,14 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
--
+- Progressive image sizes for Imgur and Chevereto: small thumbnails in the filmstrip, medium in the grid, and a medium version shown while a full image is still loading after 0.8 s.
+- Lighter video on slow connections or data saver: Streamable's mobile version and RedGifs SD. RedGifs now plays as a native video in the Reels-style player, with the embedded player as fallback.
 
 ### Changed
--
+- The opening item is chosen once the page being read is processed (at most about 1.5 s), so it no longer jumps when a link near the top resolves late.
 
 ### Fixed
--
+- Filmstrip thumbnails stayed empty during autoplay: thumbnails that scrolled out of view no longer hold up the queue, and a loaded full image also fills its own thumbnail.
 
 ## [2.2.0] - 2026-11-24
 

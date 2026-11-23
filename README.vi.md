@@ -67,7 +67,10 @@ Trong modal có 3 kiểu xem:
   - Dải ảnh luôn giữ mục đang xem ở giữa và có vạch chia trang ("Tr. 2"); thanh công cụ cho biết mục thuộc trang nào ("Trang 2/3"). Kéo dải ảnh bằng chuột (hoặc lăn chuột) để cuộn; bấm bình thường vẫn mở ảnh đó.
   - Nút **lọc** cạnh số thứ tự (Tất cả / Ảnh / Video, kèm số lượng): chuyển ảnh, tự động phát, dải ảnh và chế độ Lưới / Cuộn chỉ tính loại đã chọn.
   - Thanh công cụ hiện số thứ tự kèm một dòng nhỏ bên dưới (trang, mục hỏng, tiến độ tải). Cửa sổ hẹp hơn khoảng 960 px và điện thoại dùng 2 hàng: số thứ tự, nút lọc và nút đóng ở trên, các công cụ có tên ở dưới.
-  - Ảnh thu nhỏ chỉ tải khi hiện trên màn hình, tối đa 4 ảnh cùng lúc, nên ảnh bạn mở không phải chờ sau chúng. Trong lúc ảnh lớn đang tải, ảnh thu nhỏ (nếu đã có) hiện mờ kèm vòng xoay; sau đó ảnh kế trước / kế sau được tải trước lần lượt từng ảnh.
+  - Ảnh thu nhỏ chỉ tải khi hiện trên màn hình, tối đa 4 ảnh cùng lúc, nên ảnh bạn mở không phải chờ sau chúng. Trong lúc ảnh lớn đang tải, ảnh thu nhỏ (nếu đã có) hiện mờ kèm vòng xoay; sau đó ảnh kế trước / kế sau được tải trước lần lượt từng ảnh. Ảnh lớn đã tải xong cũng được dùng luôn cho ô thu nhỏ của nó, không tốn thêm yêu cầu.
+  - **Cỡ ảnh:** với Imgur và các dịch vụ Chevereto (anh.moe, ibb.co…), dải ảnh dùng bản nhỏ và chế độ Lưới dùng bản vừa của dịch vụ. Nếu sau 0,8 giây ảnh gốc vẫn đang tải, bản vừa được hiện tạm (ảnh gốc tải nhanh thì không gọi bản vừa). Dịch vụ khác chỉ có một file nên vẫn dùng cách hiện ảnh thu nhỏ mờ.
+  - **Chất lượng video:** Streamable và RedGifs có bản nhẹ hơn. Bản này được dùng khi mạng chậm (3G trở xuống) hoặc bật tiết kiệm dữ liệu, và cho ảnh thu nhỏ; còn lại phát bản chất lượng đầy đủ. Chất lượng được chọn trước khi phát, không đổi giữa chừng. Nếu video trực tiếp không phát được thì chuyển sang trình phát nhúng của dịch vụ.
+  - Mục mở đầu được chọn khi trang đang đọc xử lý xong (tối đa khoảng 1,5 giây), nên không bị nhảy khi một link ở đầu trang xử lý xong muộn.
   - Phóng to: bấm chuột trái vào ảnh (bấm lần nữa để thu lại), lăn chuột, hoặc chụm hai ngón. Khi đang phóng to thì kéo để di chuyển. Chuột phải vẫn mở menu bình thường (lưu ảnh, sao chép…), không phóng to.
   - **Tự động phát** (phím Space), **mặc định bật**: tự chuyển ảnh sau 3,5 giây; với video thì chờ phát xong. Nút hiện ▶ khi tắt và biểu tượng tạm dừng khi bật; lựa chọn được ghi nhớ.
   - **Video** dùng thanh điều khiển kiểu Reels nằm sát mép dưới video, ngay dưới thông tin người đăng: nút phát/tạm dừng, thời gian, tắt tiếng, toàn màn hình và thanh tiến trình mảnh (bấm hoặc kéo để tua).
@@ -132,7 +135,8 @@ Bộ nhớ đệm giữ 30 chủ đề xem gần nhất và tự xoá mục hế
 | Link thẳng tới `.jpg .png .gif .webp .mp4 .webm …` | Hiện trực tiếp |
 | anh.moe, ibb.co, zpic… (Chevereto) | Mở trang lấy ảnh gốc, bỏ đuôi `.md` / `.th` để ra ảnh kích thước đầy đủ; link album thì lấy cả album |
 | Streamable | Lấy file mp4 qua API (phát hiện được video đã xoá), không lấy được thì dùng trình phát nhúng |
-| Imgur, YouTube, Vimeo, RedGifs, TikTok | Ảnh trực tiếp hoặc trình phát nhúng |
+| RedGifs | Phát thẳng file MP4 qua API (HD, hoặc SD khi mạng chậm); không được thì dùng trình phát nhúng |
+| Imgur, YouTube, Vimeo, TikTok | Ảnh trực tiếp hoặc trình phát nhúng |
 | Dịch vụ khác trong danh sách | Đọc thẻ `og:image` / `og:video` của trang |
 
 ### Ảnh thu nhỏ cho video

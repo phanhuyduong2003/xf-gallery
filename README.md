@@ -67,7 +67,10 @@ The modal has 3 views:
   - The filmstrip keeps the viewed item in the middle and shows page dividers ("p. 2"); the toolbar shows which page the item comes from ("Page 2/3"). Drag the filmstrip with the mouse (or use the mouse wheel) to scroll it; a plain click still opens a thumbnail.
   - **Filter** button next to the counter (All / Images / Videos, with counts): navigation, autoplay, the filmstrip and Grid / Scroll then only include that kind.
   - The toolbar shows the counter with a small line below it (page, broken items, loading progress). Windows narrower than about 960 px and phones use two rows: counter, filter and close on top, the labelled tools below.
-  - Thumbnails load only when visible, at most 4 at a time, so the item you open is not stuck behind them. While a full image loads, its thumbnail (if already loaded) is shown blurred with a spinner; the next and previous images are then preloaded one at a time.
+  - Thumbnails load only when visible, at most 4 at a time, so the item you open is not stuck behind them. While a full image loads, its thumbnail (if already loaded) is shown blurred with a spinner; the next and previous images are then preloaded one at a time. A loaded full image also fills its filmstrip thumbnail at no extra cost.
+  - **Image sizes:** for Imgur and Chevereto hosts (anh.moe, ibb.co…) the filmstrip uses the host's small version and the grid its medium version. If a full image is still loading after 0.8 s, the medium version is shown meanwhile (it is not requested when the full image is quick). Other hosts offer a single file, so they keep the blurred-thumbnail approach.
+  - **Video quality:** Streamable and RedGifs offer a lighter version. It is used on slow connections (3G or slower) or with data saver on, and for thumbnails; otherwise the full-quality version plays. The quality is chosen before playback and never switched mid-way. If the direct video will not play, the host's embedded player is used instead.
+  - The opening item is chosen once the page you are reading has been processed (at most about 1.5 s), so it does not jump when a link near the top of the page resolves late.
   - Zoom: left-click the image (click again to zoom out), use the mouse wheel, or pinch. Drag to pan while zoomed. Right-click still opens the normal context menu (save image, copy…) and does not zoom.
   - **Autoplay** (Space), **on by default**: images advance every 3.5 seconds; videos advance when they end. The button shows ▶ when off and a pause icon when on; your choice is remembered.
   - **Videos** use Reels-style controls along the bottom edge of the video, right below the poster info: play/pause, time, mute, fullscreen and a slim progress bar (click or drag to seek).
@@ -134,7 +137,8 @@ The cache keeps the 30 most recently viewed threads and clears expired entries o
 | Direct links to `.jpg .png .gif .webp .mp4 .webm …` | Shown directly |
 | anh.moe, ibb.co, zpic… (Chevereto) | Opens the page to get the original image, strips the `.md` / `.th` suffix for full size; album links collect the whole album |
 | Streamable | Gets the MP4 through the API (detects deleted videos); falls back to the embedded player |
-| Imgur, YouTube, Vimeo, RedGifs, TikTok | Direct image or embedded player |
+| RedGifs | Plays the MP4 directly through the API (HD, or SD on slow networks); falls back to the embedded player |
+| Imgur, YouTube, Vimeo, TikTok | Direct image or embedded player |
 | Other hosts in the list | Reads the page's `og:image` / `og:video` tags |
 
 ### Video thumbnails

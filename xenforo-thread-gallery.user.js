@@ -237,6 +237,31 @@
     return x ? (bareHost(x.hostname) + stripChevereto(x.pathname) + x.search).toLowerCase() : String(u);
   }
 
+  // Slow connection or data saver (Network Information API; not available in Firefox, which then counts as fast)
+  const slowNet = () => {
+    const c = navigator.connection;
+    return !!c && (c.saveData || /(^|-)(2g|3g)$/.test(c.effectiveType || ''));
+  };
+
+  // Smaller sizes offered by some hosts: Imgur (t = 160 px, l = 640 px) and Chevereto (.th / .md)
+  const CHEVERETO_HOST = /(^|\.)(anh\.moe|ibb\.co|imgbb\.com|jpg\.church|jpg\.pet|jpg5\.su|lensdump\.com)$/;
+  function imageSizes(item) {
+    const out = {};
+    if (item.thumb && /\.md\.[a-z0-9]+(\?|$)/i.test(item.thumb)) out.medium = item.thumb; // Chevereto embed: the post shows .md
+    const u = abs(item.candidates[0] || '');
+    if (!u) return out;
+    const h = bareHost(u.hostname);
+    let m;
+    if (h === 'i.imgur.com' && (m = u.pathname.match(/^\/(\w{5}|\w{7})\.(jpe?g|png|webp)$/i))) {
+      return { small: `https://i.imgur.com/${m[1]}t.jpg`, medium: `https://i.imgur.com/${m[1]}l.jpg` };
+    }
+    if (CHEVERETO_HOST.test(h) && /\.(jpe?g|png|webp|gif)$/i.test(u.pathname) && !/\.(md|th)\.[a-z0-9]+$/i.test(u.pathname)) {
+      const sized = (tag) => u.href.replace(/(\.[a-z0-9]+)(\?.*)?$/i, `.${tag}$1$2`);
+      return { small: sized('th'), medium: out.medium || sized('md') };
+    }
+    return out;
+  }
+
   function makeQueue(limit) {
     let active = 0;
     const waiting = [];
@@ -250,6 +275,7 @@
     return (fn) => new Promise((res, rej) => { waiting.push({ fn, res, rej }); next(); });
   }
   const resolveQueue = makeQueue(RESOLVE_CONCURRENCY);
+  let redgifsToken = null;
   const thumbQueue = makeQueue(THUMB_CONCURRENCY);
 
   // Cross-origin GET through the userscript manager (falls back to fetch, which only works with CORS)
@@ -427,7 +453,10 @@
       const id = m[1];
       return deferred(source, () => resolveStreamable(id, source));
     }
-    if (/redgifs\.com$/.test(h) && (m = p.match(/\/(?:watch|ifr|i)\/(\w+)/))) return [{ type: 'embed', url: `https://www.redgifs.com/ifr/${m[1]}`, source }];
+    if (/redgifs\.com$/.test(h) && (m = p.match(/\/(?:watch|ifr|i)\/(\w+)/))) {
+      const id = m[1];
+      return deferred(source, () => resolveRedgifs(id, source));
+    }
     if (h === 'vimeo.com' && (m = p.match(/^\/(\d+)/))) return [{ type: 'embed', url: `https://player.vimeo.com/video/${m[1]}`, source }];
     if (h === 'player.vimeo.com') return [{ type: 'embed', url: u.href, source }];
     if (/tiktok\.com$/.test(h) && (m = p.match(/\/video\/(\d+)/))) return [{ type: 'embed', url: `https://www.tiktok.com/embed/v2/${m[1]}`, source }];
@@ -446,13 +475,30 @@
       !!youtubeId(u) || /(^|\.)(imgur|streamable|redgifs|vimeo|tiktok)\.com$/.test(h) || hostListed(h);
   }
 
+  // RedGifs: play the MP4 directly (HD, or SD on slow networks); the embedded player is the fallback
+  async function resolveRedgifs(id, source) {
+    const embed = `https://www.redgifs.com/ifr/${id}`;
+    try {
+      const gif = await redgifsInfo(id);
+      if (gif === 'DEAD') return 'DEAD';
+      const u = (gif && gif.urls) || {};
+      if (u.hd || u.sd) return [{ type: 'video', candidates: uniq([u.hd, u.sd]), sd: u.sd, thumb: u.poster || u.thumbnail, fallbackEmbed: embed, source }];
+    } catch (e) { /* use the embedded player */ }
+    return [{ type: 'embed', url: embed, source }];
+  }
+
   async function resolveStreamable(id, source) {
     try {
       const { status, data } = await gmJSON(`https://api.streamable.com/videos/${id}`);
       if (status === 404) return 'DEAD';
       const file = data && data.files && (data.files.mp4 || data.files['mp4-mobile']);
       const fix = (x) => (x && x.startsWith('//') ? 'https:' + x : x);
-      if (file && file.url) return [{ type: 'video', candidates: [fix(file.url)], thumb: fix(data.thumbnail_url), source }];
+      const mobile = data && data.files && data.files['mp4-mobile'];
+      if (file && file.url) {
+        const sd = mobile && mobile.url && mobile !== file ? fix(mobile.url) : undefined;
+        return [{ type: 'video', candidates: uniq([fix(file.url), sd]), sd, thumb: fix(data.thumbnail_url),
+          fallbackEmbed: `https://streamable.com/e/${id}`, source }];
+      }
     } catch (e) { /* fall back to the embedded player */ }
     return [{ type: 'embed', url: `https://streamable.com/e/${id}`, source }];
   }
@@ -776,6 +822,9 @@
     pagesCached: 0,
     startPage: 1,            // the page the user is reading: the gallery opens on its first item
     resumeKey: null,         // last viewed item, when it is on the page being read
+    startLocked: false,      // the opening item has been chosen: no more automatic switching
+    startPending: 0,         // links of the page being read still resolving
+    startReplayed: false,
     videoCtl: null,
   };
   let ui = null;
@@ -1311,6 +1360,22 @@ a.xtg-name:hover{text-decoration:underline}
     return a < b || (a === b && comparePos(item.pos, S.cur.pos) < 0);
   };
 
+  // Pick the opening item once the page being read is complete (its links resolved, or after 1.5 s),
+  // so the viewer does not jump when a link near the top of the page resolves late.
+  function maybeLockStart() { if (S.startReplayed && S.startPending <= 0) lockStart(); }
+  function lockStart() {
+    if (S.startLocked) return;
+    S.startLocked = true;
+    if (S.userMoved || S.cur) return;
+    let best = null;
+    for (const item of S.items) {
+      if (item.dead || !passesFilter(item)) continue;
+      if (!best || startRank(item) < startRank(best)) best = item;
+      if (startRank(best) === 0) break; // items are sorted, so the first one on the page being read is the best
+    }
+    if (best) showItem(best);
+  }
+
   function addItem(spec, pos, ctx) {
     let key;
     if (spec.type === 'dead') {
@@ -1327,6 +1392,7 @@ a.xtg-name:hover{text-decoration:underline}
       key, pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, caption: ctx.caption || null, dead: spec.type === 'dead',
     });
     if (item.dead) item.type = 'image';
+    if (item.type === 'image' && !item.dead) Object.assign(item, imageSizes(item));
 
     // binary insert to keep thread order (async results arrive out of order)
     let lo = 0, hi = S.items.length;
@@ -1346,7 +1412,9 @@ a.xtg-name:hover{text-decoration:underline}
       // pick the opening item until the user navigates (results arrive out of order)
       if (!S.userMoved && passesFilter(item)) {
         if (S.resumeKey && key === S.resumeKey) { S.userMoved = true; showItem(item); }
-        else if (!S.cur || isBetterStart(item)) showItem(item);
+        // the opening item is picked once the page being read is complete (see lockStart); after that only
+        // a first item, or a move onto the page being read, can still change it
+        else if (S.startLocked && (!S.cur || (S.cur.page !== S.startPage && item.page === S.startPage))) showItem(item);
       }
     }
     scheduleStatus();
@@ -1358,6 +1426,8 @@ a.xtg-name:hover{text-decoration:underline}
     if (S.keys.has(linkKey)) return; // same link already being resolved (usually a quote)
     S.keys.add(linkKey);
     const gen = S.gen;
+    const forStart = !S.startLocked && ctx.page === S.startPage;
+    if (forStart) S.startPending++;
     S.pending++;
     scheduleStatus();
     const done = (res) => {
@@ -1368,6 +1438,7 @@ a.xtg-name:hover{text-decoration:underline}
     unit.run().then(done, () => done('DEAD')).finally(() => {
       if (gen !== S.gen) return;
       S.pending--;
+      if (forStart) { S.startPending--; maybeLockStart(); }
       scheduleStatus();
     });
   }
@@ -1395,6 +1466,20 @@ a.xtg-name:hover{text-decoration:underline}
         if (u) handleUnit(u, [page, pi, k], Object.assign({}, ctx, { caption: (post.captions && post.captions[k]) || null }));
       });
     });
+  }
+
+  // A native video that will not play falls back to the host's embedded player when there is one
+  function videoFail(item) {
+    if (!item.fallbackEmbed || item.dead) { markDead(item); return; }
+    Object.assign(item, { type: 'embed', url: item.fallbackEmbed, fallbackEmbed: null, candidates: [] });
+    replaceTile(item);
+    if (item.thumbEl) {
+      const fresh = buildThumb(item);
+      fresh.classList.toggle('on', item.thumbEl.classList.contains('on'));
+      item.thumbEl.replaceWith(fresh);
+      item.thumbEl = fresh;
+    }
+    if (S.cur === item) renderStage();
   }
 
   function markDead(item) {
@@ -1448,6 +1533,7 @@ a.xtg-name:hover{text-decoration:underline}
   // Thumbnails load only when (nearly) visible and at most THUMB_LOADS at a time. The image being viewed
   // is then not stuck behind dozens of thumbnail downloads, and hosts get fewer simultaneous requests.
   const THUMB_LOADS = 4;
+  const MID_DELAY_MS = 800; // wait this long for the full image before asking for a medium size
   const thumbLoadQueue = makeQueue(THUMB_LOADS);
   const lazyObserver = new IntersectionObserver((entries) => {
     for (const en of entries) {
@@ -1457,11 +1543,32 @@ a.xtg-name:hover{text-decoration:underline}
     }
   }, { rootMargin: '300px' });
 
+  function nearView(el, margin = 300) {
+    const r = el.getBoundingClientRect();
+    const box = (el.closest('.xtg-strip, .xtg-scroll') || document.documentElement).getBoundingClientRect();
+    return r.width > 0 && r.right >= box.left - margin && r.left <= box.right + margin &&
+      r.bottom >= box.top - margin && r.top <= box.bottom + margin;
+  }
+
+  // A full image that has loaded is in the browser cache: show it in the item's filmstrip thumbnail too
+  // (no extra request) if that thumbnail has not loaded yet.
+  function fillThumb(item, src) {
+    const ti = item.thumbEl && item.thumbEl.querySelector('img');
+    if (!ti || (ti.complete && ti.naturalWidth > 0)) return;
+    lazyObserver.unobserve(ti);
+    ti.onerror = null;
+    ti.onload = null;
+    ti.src = src;
+    if (!item.shown) item.shown = src;
+  }
+
   function lazyImage(img, item, urls, onFail, priority = 'low') {
     img.fetchPriority = priority;
     img.draggable = false;
     img.xtgStart = () => thumbLoadQueue(() => new Promise((done) => {
-      if (!img.isConnected) { done(); return; }
+      if (!img.isConnected || img.getAttribute('src')) { done(); return; }
+      // scrolled out of view while waiting in the queue (autoplay, dragging): wait until it is visible again
+      if (!nearView(img)) { lazyObserver.observe(img); done(); return; }
       loadImage(img, item, urls, () => { onFail(); done(); }, (src) => { if (!item.shown) item.shown = src; done(); });
     }));
     lazyObserver.observe(img);
@@ -1476,15 +1583,17 @@ a.xtg-name:hover{text-decoration:underline}
         if (S.cur !== item || x.working) { done(); return; } // the user moved on: skip stale preloads
         const im = new Image();
         im.fetchPriority = 'low';
-        loadImage(im, x, x.candidates.slice(), done, () => done());
+        loadImage(im, x, x.candidates.slice(), done, (src) => { fillThumb(x, src); done(); });
       }));
     });
   }
 
   // frag '#t=1' makes thumbnails show the frame at 1 s instead of the (often black) first frame
+  // Thumbnails (frag set) and slow connections prefer the lighter version (item.sd) when the host offers one
   function loadVideo(v, item, onFail, frag = '') {
     let i = 0;
-    const tryNext = () => { if (i < item.candidates.length) v.src = item.candidates[i++] + frag; else onFail(); };
+    const urls = item.sd && (frag || slowNet()) ? uniq([item.sd, ...item.candidates]) : item.candidates;
+    const tryNext = () => { if (i < urls.length) v.src = urls[i++] + frag; else onFail(); };
     v.onerror = tryNext;
     tryNext();
   }
@@ -1530,13 +1639,13 @@ a.xtg-name:hover{text-decoration:underline}
 
     if (item.type === 'image') {
       const img = el('img', { alt: '' });
-      lazyImage(img, item, uniq(list ? [item.working, ...item.candidates] : [item.working, item.thumb, ...item.candidates]), fail, list ? 'auto' : 'low');
+      lazyImage(img, item, uniq(list ? [item.working, ...item.candidates] : [item.medium, item.working, item.thumb, ...item.candidates]), fail, list ? 'auto' : 'low');
       img.onclick = open;
       t.appendChild(img);
     } else if (list && item.type === 'video') {
       const v = mediaEl('video', { controls: true, preload: 'metadata' });
       if (item.thumb) v.poster = item.thumb;
-      loadVideo(v, item, fail);
+      loadVideo(v, item, () => videoFail(item));
       t.appendChild(v);
     } else if (list) {
       t.appendChild(iframeEl(item.url, true));
@@ -1550,7 +1659,7 @@ a.xtg-name:hover{text-decoration:underline}
         t.appendChild(img);
       } else if (item.type === 'video') {
         const v = mediaEl('video', { muted: true, preload: 'metadata' });
-        loadVideo(v, item, fail, '#t=1');
+        loadVideo(v, item, () => videoFail(item), '#t=1');
         t.appendChild(v);
       } else {
         t.innerHTML = `<div class="xtg-ph">${ic('play', 30, true)}${esc(hostOf(item.url))}</div>`;
@@ -1605,7 +1714,7 @@ a.xtg-name:hover{text-decoration:underline}
     th.dataset.kind = kindOf(item);
     if (item.type === 'image') {
       const img = el('img', { alt: '' });
-      lazyImage(img, item, uniq([item.working, item.thumb, ...item.candidates]), () => markDead(item));
+      lazyImage(img, item, uniq([item.small, item.medium, item.thumb, item.working, ...item.candidates]), () => markDead(item));
       th.appendChild(img);
     } else {
       if (item.thumb) {
@@ -1626,7 +1735,7 @@ a.xtg-name:hover{text-decoration:underline}
   // ---------------------------------------------------------------------------
   // Thumbnails for videos / embeds that have none
   // ---------------------------------------------------------------------------
-  let redgifsToken = null;
+
 
   async function oembedThumb(endpoint) {
     const { data } = await gmJSON(endpoint);
@@ -1641,10 +1750,16 @@ a.xtg-name:hover{text-decoration:underline}
     return x ? x.href : null;
   }
 
-  async function redgifsThumb(id) {
+  async function redgifsInfo(id) {
     if (!redgifsToken) redgifsToken = (await gmJSON('https://api.redgifs.com/v2/auth/temporary')).data.token;
-    const { data } = await gmJSON(`https://api.redgifs.com/v2/gifs/${id.toLowerCase()}`, { Authorization: 'Bearer ' + redgifsToken });
-    const urls = (data && data.gif && data.gif.urls) || {};
+    const { status, data } = await gmJSON(`https://api.redgifs.com/v2/gifs/${id.toLowerCase()}`, { Authorization: 'Bearer ' + redgifsToken });
+    if (status === 404 || status === 410) return 'DEAD';
+    return (data && data.gif) || null;
+  }
+
+  async function redgifsThumb(id) {
+    const gif = await redgifsInfo(id);
+    const urls = (gif && gif !== 'DEAD' && gif.urls) || {};
     return urls.poster || urls.thumbnail || null;
   }
 
@@ -2166,17 +2281,37 @@ a.xtg-name:hover{text-decoration:underline}
       ui.stage.appendChild(img);
       if (item.working) {
         // the full image has loaded before: it comes straight from the browser cache
-        loadImage(img, item, uniq([item.working, ...item.candidates]), () => markDead(item), () => preloadAround(item));
+        loadImage(img, item, uniq([item.working, ...item.candidates]), () => markDead(item), (src) => { fillThumb(item, src); preloadAround(item); });
       } else {
         // show the thumbnail already in the cache (blurred) with a spinner while the full image loads
         if (item.shown) { img.src = item.shown; img.classList.add('xtg-preview'); }
         ui.stage.classList.add('xtg-loading');
+        let fullDone = false, mid = null;
+        // full image still loading after MID_DELAY_MS and the host has a medium size: show that meanwhile
+        const midTimer = item.medium && item.medium !== item.shown && setTimeout(() => {
+          if (fullDone || S.cur !== item) return;
+          mid = new Image();
+          mid.fetchPriority = 'high';
+          mid.referrerPolicy = 'no-referrer';
+          mid.onload = () => {
+            if (fullDone || S.cur !== item || !img.isConnected || mid.naturalWidth <= 1) return;
+            img.src = mid.src;
+            img.classList.remove('xtg-preview');
+          };
+          mid.src = item.medium;
+        }, MID_DELAY_MS);
         const full = new Image();
         full.fetchPriority = 'high';
         loadImage(full, item, uniq(item.candidates), () => {
+          fullDone = true;
+          clearTimeout(midTimer);
           if (S.cur === item) ui.stage.classList.remove('xtg-loading');
           markDead(item);
         }, (src) => {
+          fullDone = true;
+          clearTimeout(midTimer);
+          if (mid && !mid.complete) mid.src = ''; // the full image won: drop the medium request
+          fillThumb(item, src); // also when the user has already moved on
           if (S.cur !== item || !img.isConnected) return;
           img.src = src;
           img.classList.remove('xtg-preview');
@@ -2188,7 +2323,7 @@ a.xtg-name:hover{text-decoration:underline}
     } else if (item.type === 'video') {
       const v = mediaEl('video', { autoplay: true, muted: !!S.muted });
       if (item.thumb) v.poster = item.thumb;
-      loadVideo(v, item, () => markDead(item));
+      loadVideo(v, item, () => videoFail(item));
       v.addEventListener('ended', () => { if (S.slideshow) nextOrStop(); });
       ui.stage.appendChild(v);
       addOverlay(item, v);
@@ -2281,6 +2416,7 @@ a.xtg-name:hover{text-decoration:underline}
         }
         if (p === cur || fetched) cache.put(key, { posts, v: CACHE_SCHEMA });
         if (!S.stopped && gen === S.gen) replayPage(posts, p, url);
+        if (p === cur) { S.startReplayed = true; maybeLockStart(); setTimeout(lockStart, 1500); }
       } catch (e) {
         S.pageErrors++;
         console.warn('[XenForo Thread Gallery] failed to load page', p, e);
@@ -2290,6 +2426,7 @@ a.xtg-name:hover{text-decoration:underline}
       scheduleStatus();
       if (fetched) await sleep(PAGE_DELAY_MS + Math.random() * PAGE_JITTER_MS); // be gentle with the forum
     })));
+    if (gen === S.gen) lockStart();
     scheduleStatus();
   }
 
@@ -2301,7 +2438,7 @@ a.xtg-name:hover{text-decoration:underline}
     await cache.dropPrefix(`p:${THREAD_ID}:`);
     Object.assign(S, {
       items: [], keys: new Set(), pending: 0, pagesDone: 0, pagesCached: 0, pageErrors: 0,
-      stopped: false, cur: null, userMoved: false, resumeKey: null, noCache: true,
+      stopped: false, cur: null, userMoved: false, resumeKey: null, startLocked: false, startPending: 0, startReplayed: false, noCache: true,
     });
     ui.grid.innerHTML = '';
     ui.strip.innerHTML = '';
