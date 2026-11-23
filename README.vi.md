@@ -11,7 +11,19 @@ Script gom toàn bộ ảnh và video của một chủ đề XenForo (qua mọi
 3. Ô *Additional info*: dán nội dung `GREASYFORK.md` (tiếng Anh), chọn định dạng Markdown. Sau đó thêm phần mô tả theo ngôn ngữ cho **Tiếng Việt (vi)** và dán `GREASYFORK.vi.md` vào đó, để người xem dùng tiếng Việt thấy mô tả tiếng Việt.
 4. Bấm **Post script**.
 
-**Cập nhật về sau:** mỗi thay đổi ghi vào [CHANGELOG.vi.md](CHANGELOG.vi.md) (hoặc [CHANGELOG.md](CHANGELOG.md)) ở mục *Chưa phát hành*. Khi phát hành, chuyển các mục đó sang một mục phiên bản mới, đổi `@version` thành đúng số đó (vd `2.0.1`) để người dùng nhận bản mới, rồi trên Greasy Fork → **Update** dán code mới và sao chép các mục của phiên bản đó vào ô **Changelog**. Commit message viết theo quy tắc trong [CONTRIBUTING.vi.md](CONTRIBUTING.vi.md).
+### Đồng bộ từ GitHub
+
+Mã nguồn: <https://github.com/phanhuyduong2003/xf-gallery>. Greasy Fork lấy được cả code lẫn phần mô tả từ kho này, nên khi cập nhật không phải dán tay.
+
+Trên Greasy Fork → trang script → **Quản trị** (*Admin*):
+
+1. **Đồng bộ mã nguồn**: điền liên kết `https://raw.githubusercontent.com/phanhuyduong2003/xf-gallery/main/xenforo-thread-gallery.user.js`, chọn **Tự động**.
+2. **Thông tin bổ sung mặc định**: chọn Markdown, đồng bộ từ `https://raw.githubusercontent.com/phanhuyduong2003/xf-gallery/main/GREASYFORK.md`.
+3. **Thêm thông tin bổ sung được bản địa hoá** → **Tiếng Việt (vi)**, đồng bộ từ `https://raw.githubusercontent.com/phanhuyduong2003/xf-gallery/main/GREASYFORK.vi.md`.
+4. **Ngôn ngữ mặc định**: English.
+5. Mở [Thiết lập webhook](https://greasyfork.org/vi/users/webhook-info), sao chép *Payload URL* và *Secret*. Trên GitHub → kho → **Settings → Webhooks → Add webhook**: dán cả hai, *Content type* chọn `application/json`, sự kiện chọn **Just the push event**. Từ đó Greasy Fork cập nhật ngay khi bạn đẩy code, không phải chờ lần kiểm tra định kỳ.
+
+**Phát hành bản cập nhật:** mỗi thay đổi ghi vào [CHANGELOG.vi.md](CHANGELOG.vi.md) (và [CHANGELOG.md](CHANGELOG.md)) ở mục *Chưa phát hành*. Khi phát hành, chuyển các mục đó sang một mục phiên bản mới, đổi `@version` thành đúng số đó (vd `2.0.1`), rồi commit với tóm tắt một dòng như trong [CONTRIBUTING.vi.md](CONTRIBUTING.vi.md). Đẩy lên nhánh `main`: Greasy Fork tự lấy code mới và dùng commit message làm changelog.
 
 Nếu đã cài bản cũ "XenForo Album", hãy gỡ nó đi trước khi cài bản mới để không có 2 nút Album. Các tuỳ chọn cũ (chế độ xem, danh sách dịch vụ ảnh) không được chuyển sang.
 

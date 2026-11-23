@@ -11,7 +11,19 @@ This userscript collects every image and video across all pages of a XenForo thr
 3. *Additional info*: paste the contents of `GREASYFORK.md` (English) and choose the Markdown format. Then add a localized additional info for **Tiếng Việt (vi)** and paste `GREASYFORK.vi.md` into it, so Vietnamese visitors see the Vietnamese description.
 4. Click **Post script**.
 
-**Updating later:** record each change in [CHANGELOG.md](CHANGELOG.md) under *Unreleased*. When releasing, move those items into a new version section, bump `@version` to the same number (e.g. `2.0.1`) so users receive the update, then on Greasy Fork → **Update** paste the new code and copy that version's items into the **Changelog** box. Commit messages follow the rules in [CONTRIBUTING.md](CONTRIBUTING.md).
+### Syncing from GitHub
+
+Source code: <https://github.com/phanhuyduong2003/xf-gallery>. Greasy Fork can pull both the code and the description from this repository, so updates need no manual pasting.
+
+On Greasy Fork → the script → **Admin**:
+
+1. **Code sync**: set the URL to `https://raw.githubusercontent.com/phanhuyduong2003/xf-gallery/main/xenforo-thread-gallery.user.js` and choose **Automatic**.
+2. **Additional info (default language)**: choose Markdown and sync from `https://raw.githubusercontent.com/phanhuyduong2003/xf-gallery/main/GREASYFORK.md`.
+3. **Add localized additional info** → **Tiếng Việt (vi)**, sync from `https://raw.githubusercontent.com/phanhuyduong2003/xf-gallery/main/GREASYFORK.vi.md`.
+4. **Default language**: English.
+5. Open [Set up webhook](https://greasyfork.org/users/webhook-info) and copy the *Payload URL* and *Secret*. On GitHub → the repository → **Settings → Webhooks → Add webhook**: paste both, content type `application/json`, event **Just the push event**. Greasy Fork then updates as soon as you push, instead of on its periodic check.
+
+**Releasing an update:** record each change in [CHANGELOG.md](CHANGELOG.md) under *Unreleased*. When releasing, move those items into a new version section, bump `@version` to the same number (e.g. `2.0.1`), and commit with a one-line summary as described in [CONTRIBUTING.md](CONTRIBUTING.md). Push to `main`: Greasy Fork picks up the new code and uses the commit message as the changelog.
 
 If the old "XenForo Album" script is installed, remove it first, otherwise there will be two Album buttons. Its settings (view mode, image host list) are not carried over.
 

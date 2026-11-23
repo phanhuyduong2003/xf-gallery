@@ -7,7 +7,7 @@ Mọi thay đổi đáng chú ý của **XenForo Thread Gallery** được ghi �
 **Khi phát hành bản cập nhật:**
 1. Chuyển các mục trong *Chưa phát hành* sang một mục phiên bản mới, ghi ngày hôm nay.
 2. Đổi `@version` trong `xenforo-thread-gallery.user.js` thành đúng số đó.
-3. Trên Greasy Fork → **Update**, dán code mới và sao chép các mục của phiên bản đó vào ô **Changelog**.
+3. Commit với tóm tắt một dòng các mục của phiên bản đó (xem [CONTRIBUTING.vi.md](CONTRIBUTING.vi.md)) rồi đẩy lên `main`. Greasy Fork tự đồng bộ code và hiện commit message làm changelog.
 
 Quy tắc commit và các bước phát hành đầy đủ: [CONTRIBUTING.vi.md](CONTRIBUTING.vi.md).
 
