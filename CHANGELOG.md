@@ -16,6 +16,17 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+## [2.1.1] - 2026-11-24
+
+### Added
 - Ko-fi support link: shown as a donation button on Greasy Fork (`@contributionURL`) and as a Sponsor button on GitHub.
 
 ### Changed

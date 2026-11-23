@@ -16,6 +16,17 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
+-
+
+### Thay đổi
+-
+
+### Sửa lỗi
+-
+
+## [2.1.1] - 2026-11-24
+
+### Thêm
 - Link ủng hộ qua Ko-fi: hiện thành nút ủng hộ trên Greasy Fork (`@contributionURL`) và nút Sponsor trên GitHub.
 
 ### Thay đổi
