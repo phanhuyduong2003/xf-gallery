@@ -52,3 +52,9 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 - Tuỳ chọn (kiểu xem, tắt tiếng, nhãn, danh sách dịch vụ ảnh) được lưu riêng cho từng diễn đàn trong `localStorage`; bộ nhớ đệm nằm trong IndexedDB (30 chủ đề gần nhất). **Tuỳ chọn → Tải lại chủ đề này** để bỏ qua bộ nhớ đệm.
 - Ảnh/video đã bị xoá khỏi nơi lưu thì không lấy lại được, chỉ được ẩn đi.
 - Với trình phát nhúng (YouTube…), script không kiểm tra được video còn hay đã bị xoá.
+
+## Ủng hộ
+
+Miễn phí và mã nguồn mở, do Dylan Phan làm. Nếu album này giúp bạn bớt phải cuộn qua hàng chục trang, bạn có thể **[mời mình một ly cà phê trên Ko-fi](https://ko-fi.com/dylanphan)**. Cảm ơn bạn!
+
+Mã nguồn, báo lỗi và lịch sử thay đổi: [GitHub](https://github.com/phanhuyduong2003/xf-gallery).

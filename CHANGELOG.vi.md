@@ -16,7 +16,7 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
--
+- Link ủng hộ qua Ko-fi: hiện thành nút ủng hộ trên Greasy Fork (`@contributionURL`) và nút Sponsor trên GitHub.
 
 ### Thay đổi
 - Nút chuyển ảnh trước / sau thành nút tròn to hơn, nền đậm, nổi rõ trên mọi ảnh và video.

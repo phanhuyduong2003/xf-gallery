@@ -52,3 +52,9 @@ Long XenForo threads often hide their images and videos between pages of text, a
 - Settings (view mode, mute, label options, host list) are stored per forum in `localStorage`; the cache lives in IndexedDB (30 most recent threads). **Options → Reload this thread** ignores the cache.
 - Media that was deleted from its host cannot be recovered; it is only hidden.
 - Embedded players (YouTube…) cannot be checked for availability.
+
+## Support
+
+Free and open source, made by Dylan Phan. If this gallery saves you some scrolling, you can **[buy me a coffee on Ko-fi](https://ko-fi.com/dylanphan)**. Thank you!
+
+Source code, issues and changelog: [GitHub](https://github.com/phanhuyduong2003/xf-gallery).

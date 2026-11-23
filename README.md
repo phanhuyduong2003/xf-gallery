@@ -151,3 +151,9 @@ Icons come from [Lucide](https://lucide.dev) (ISC license) and are inlined as SV
 - Media deleted from its host cannot be recovered; it is only hidden.
 - For embedded players (YouTube…), the script cannot tell whether the video still exists.
 - Hosts behind a captcha / Cloudflare challenge are reported as failed to load; click **Source ↗** to open them manually.
+
+## Support
+
+XenForo Thread Gallery is free and open source, made by Dylan Phan. If it saves you some scrolling, you can buy me a coffee on Ko-fi. It helps me keep improving it.
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/dylanphan)

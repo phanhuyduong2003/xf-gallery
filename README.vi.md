@@ -149,3 +149,9 @@ Icon trong giao diện lấy từ [Lucide](https://lucide.dev) (giấy phép ISC
 - Ảnh đã bị xoá ở nơi lưu thì không lấy lại được, chỉ ẩn đi.
 - Với trình phát nhúng dạng iframe (YouTube…), script không biết video còn hay đã bị xoá.
 - Dịch vụ bắt giải captcha / Cloudflare thì sẽ báo "không tải được"; bấm **nguồn ↗** để mở tay.
+
+## Ủng hộ
+
+XenForo Thread Gallery miễn phí và mã nguồn mở, do Dylan Phan làm. Nếu nó giúp bạn bớt phải cuộn qua hàng chục trang, bạn có thể mời mình một ly cà phê trên Ko-fi để mình tiếp tục cải thiện.
+
+[![Ủng hộ trên Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/dylanphan)
