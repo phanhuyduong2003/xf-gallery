@@ -63,9 +63,9 @@ Click **Album** to open the gallery as a modal on top of the page (the forum sta
 The modal has 3 views:
 
 - **View** (default): a large item in the middle, with a filmstrip below to jump to any other item.
-  - Navigate: ← → keys, the ‹ › buttons, or a horizontal swipe on phones.
+  - Navigate: ← → keys, the ‹ › buttons (beside the media on desktop, at both ends of the filmstrip on phones, so they never cover it), or a horizontal swipe on phones.
   - Zoom: left-click the image (click again to zoom out), use the mouse wheel, or pinch. Drag to pan while zoomed. Right-click still opens the normal context menu (save image, copy…) and does not zoom.
-  - **Autoplay** (Space): images advance every 3.5 seconds; videos advance when they end.
+  - **Autoplay** (Space), **on by default**: images advance every 3.5 seconds; videos advance when they end. The button shows ▶ when off and a pause icon when on; your choice is remembered.
   - **Videos** use Reels-style controls along the bottom edge of the video, right below the poster info: play/pause, time, mute, fullscreen and a slim progress bar (click or drag to seek).
     - Click the video to play/pause, double-click for fullscreen. Shortcuts: **K** play/pause, **M** mute, **F** fullscreen.
     - By default only a slim time bar is shown along the bottom edge, so the video is not covered.
@@ -80,15 +80,19 @@ The view is remembered. Other controls:
 
 - **Post ↗ / Source ↗**: open the post that contains the current item, or the item's original link.
 - **Stop**: stop loading a very long thread midway. Only shown while loading.
-- **Poster label (Reels-style)**:
-  - The top-left corner of a video always shows a **Thread starter** (blue) or **Member** tag.
-  - The bottom overlay shows the poster's avatar, name, post date and the post text (2 lines, click *Show more* to read it all). It appears together with the controls, on a light overlay so the video is not covered much.
-  - Quotes, bare links and the text of media links are removed from the post text.
-  - Press **I** to toggle labels. While an image is zoomed, both the corner tag and the bottom info hide, and come back when zoomed out.
-  - In Scroll view the label is a card above the video; in Grid view the poster's name appears on the video tile.
+- **Poster info (Reels-style)**, on both images and videos:
+  - The top-left corner always shows a **Thread starter** (blue) or **Member** tag.
+  - The bottom overlay shows the poster's avatar, name, post date, the item's position in its post ("2 of 5 in this post") and its text (2 lines, *Show more* reads it all). It sits on a light overlay so the media is not covered much.
+  - **Videos:** the info appears together with the controls (see above).
+  - **Images, desktop:** the info appears while the mouse is over the image and hides when it leaves.
+  - **Images, phone:** a compact line (name + one line of text) is always shown; tap it to expand.
+  - **Posts with several images/videos:** each item shows the text right next to it instead of the whole post. If the post starts with text, captions are taken to sit above their item (items without their own text share the caption above); if it starts with an image and ends with text, captions are taken to sit below. *Whole post* shows the full post text. Posts with a single item show the whole post.
+  - Quotes, bare links and the text of media links are removed from the text.
+  - Press **I** to toggle the info for the kind being viewed (images or videos). While an image is zoomed, the tag and the info hide.
+  - In Scroll view the info is a card above the item; in Grid view the poster's name appears on video tiles.
   - The thread starter is taken from the thread header, or from the author of the first post on page 1.
 - **Options** (the two-sliders icon):
-  - *Show poster info on videos* / *on images too*: by default labels appear on videos and embeds only.
+  - *Show info on videos* / *Show info on images*: two separate switches, both on by default.
   - *Show broken items*: deleted images/videos are hidden by default; turn this on to see them in Grid / Scroll and open their source links.
   - *Edit image host list*: domains whose links point to a *viewer page* rather than the file. The script opens that page in the background to find the real file. An entry without a dot (e.g. `zpic`) matches any domain containing that text. Add new hosts here when you come across them.
   - *Reload this thread (ignore cache)*: fetch every page and link again, for when older posts were edited or removed.

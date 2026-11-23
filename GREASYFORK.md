@@ -25,12 +25,13 @@ Long XenForo threads often hide their images and videos between pages of text, a
   - Desktop: hover the video to reveal poster info and controls.
   - Mobile: tap to pause, then seek.
   - Shortcuts: **K** play/pause, **M** mute, **F** fullscreen.
-- **Poster label**
+- **Poster info on images and videos**
   - A **Thread starter** / **Member** tag in the top-left corner.
-  - The poster's avatar, name, date and post text (quotes and bare links removed).
-  - Press **I** to toggle.
+  - The poster's avatar, name, date and text (quotes and bare links removed). On desktop it appears on hover; on phones images show a compact line you tap to expand.
+  - In posts with several images/videos, **each item gets the text next to it** ("Photo 1: …", "Photo 2: …"), with its position in the post and a *Whole post* button.
+  - Separate switches for images and videos; press **I** to toggle.
 - **Video thumbnails.** When a video has none, the script captures a frame, asks oEmbed / RedGifs, or reads `og:image`.
-- **Autoplay** (Space). Images advance every 3.5 s; videos advance when they end.
+- **Autoplay** (Space), on by default. Images advance every 3.5 s; videos advance when they end.
 - **English and Vietnamese UI**, chosen automatically from your browser language.
 - Lightweight: no external libraries. Icons are inline [Lucide](https://lucide.dev) SVGs (ISC).
 

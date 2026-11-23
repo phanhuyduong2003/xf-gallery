@@ -63,9 +63,9 @@ Bấm nút **Album** để mở album dạng modal ngay trên trang (trang diễ
 Trong modal có 3 kiểu xem:
 
 - **Xem** (mặc định): ảnh lớn ở giữa, dải ảnh thu nhỏ ở dưới để nhảy nhanh tới ảnh khác.
-  - Chuyển ảnh: phím ← →, nút ‹ ›, hoặc vuốt ngang trên điện thoại.
+  - Chuyển ảnh: phím ← →, nút ‹ › (nằm hai bên ảnh trên máy tính, ở hai đầu dải ảnh thu nhỏ trên điện thoại, nên không bao giờ che ảnh), hoặc vuốt ngang trên điện thoại.
   - Phóng to: bấm chuột trái vào ảnh (bấm lần nữa để thu lại), lăn chuột, hoặc chụm hai ngón. Khi đang phóng to thì kéo để di chuyển. Chuột phải vẫn mở menu bình thường (lưu ảnh, sao chép…), không phóng to.
-  - **Tự động phát** (phím Space): tự chuyển ảnh sau 3,5 giây; với video thì chờ phát xong.
+  - **Tự động phát** (phím Space), **mặc định bật**: tự chuyển ảnh sau 3,5 giây; với video thì chờ phát xong. Nút hiện ▶ khi tắt và biểu tượng tạm dừng khi bật; lựa chọn được ghi nhớ.
   - **Video** dùng thanh điều khiển kiểu Reels nằm sát mép dưới video, ngay dưới thông tin người đăng: nút phát/tạm dừng, thời gian, tắt tiếng, toàn màn hình và thanh tiến trình mảnh (bấm hoặc kéo để tua).
     - Bấm vào video để phát/tạm dừng, bấm đúp để xem toàn màn hình. Phím tắt: **K** phát/tạm dừng, **M** tắt tiếng, **F** toàn màn hình.
     - Mặc định video chỉ hiện thanh thời gian thu gọn ở mép dưới, không che nội dung.
@@ -80,15 +80,19 @@ Kiểu xem được ghi nhớ cho lần sau. Các nút khác:
 
 - **Bài gốc ↗ / Nguồn ↗**: mở bài viết chứa mục đang xem, hoặc link gốc của ảnh/video.
 - **Dừng tải**: dừng giữa chừng với chủ đề quá dài. Nút chỉ hiện khi đang tải.
-- **Nhãn người đăng (kiểu Reels)**:
-  - Góc trên trái video luôn hiện nhãn **Tác giả chủ đề** (chủ thớt, màu xanh) hoặc **Thành viên**.
-  - Phần thông tin ở mép dưới gồm ảnh đại diện, tên người đăng, ngày đăng và nội dung bài viết kèm theo (gọn 2 dòng, bấm *Xem thêm* để đọc hết). Phần này hiện cùng các nút điều khiển, trên một lớp phủ mờ nhạt để không che video.
-  - Nội dung bài đã bỏ phần trích dẫn, link trần và chữ của link ảnh/video.
-  - Phím **I** bật/tắt nhãn. Khi đang phóng to ảnh, cả nhãn góc lẫn phần thông tin đều tự ẩn, thu về như cũ thì hiện lại.
-  - Ở chế độ Cuộn, nhãn hiện thành thẻ phía trên video; ở chế độ Lưới, tên người đăng hiện ở góc ô video.
+- **Thông tin người đăng (kiểu Reels)**, trên cả ảnh lẫn video:
+  - Góc trên trái luôn hiện nhãn **Tác giả chủ đề** (chủ thớt, màu xanh) hoặc **Thành viên**.
+  - Phần thông tin ở mép dưới gồm ảnh đại diện, tên, ngày đăng, vị trí của mục trong bài ("2/5 trong bài") và nội dung (gọn 2 dòng, *Xem thêm* để đọc hết), trên lớp phủ mờ nhạt để không che nhiều.
+  - **Video:** thông tin hiện cùng các nút điều khiển (xem ở trên).
+  - **Ảnh, trên máy tính:** di chuột vào ảnh thì hiện, chuột ra ngoài thì ẩn.
+  - **Ảnh, trên điện thoại:** luôn hiện một dòng thu gọn (tên + một dòng nội dung); chạm vào để mở rộng.
+  - **Bài có nhiều ảnh/video:** mỗi mục hiện đoạn chữ nằm sát nó thay vì cả bài. Nếu bài mở đầu bằng chữ, tiêu đề được hiểu là nằm trên ảnh (ảnh không có chữ riêng dùng chung tiêu đề phía trên); nếu bài mở đầu bằng ảnh và kết thúc bằng chữ, tiêu đề được hiểu là nằm dưới ảnh. *Xem cả bài* để đọc toàn bộ nội dung. Bài chỉ có một mục thì hiện cả bài.
+  - Nội dung đã bỏ phần trích dẫn, link trần và chữ của link ảnh/video.
+  - Phím **I** bật/tắt thông tin của loại đang xem (ảnh hoặc video). Khi đang phóng to ảnh, nhãn và thông tin tự ẩn.
+  - Ở chế độ Cuộn, thông tin hiện thành thẻ phía trên mục; ở chế độ Lưới, tên người đăng hiện ở góc ô video.
   - Tác giả chủ đề được lấy từ dòng thông tin đầu chủ đề, hoặc từ người viết bài đầu tiên của trang 1.
 - **Tuỳ chọn** (biểu tượng hai thanh trượt):
-  - *Hiện nhãn người đăng trên video* / *cả trên ảnh*: mặc định chỉ hiện trên video và video nhúng.
+  - *Hiện thông tin trên video* / *Hiện thông tin trên ảnh*: hai công tắc riêng, mặc định đều bật.
   - *Hiện mục hỏng*: mặc định ảnh/video đã bị xoá được ẩn đi; bật để thấy chúng trong chế độ Lưới / Cuộn và mở link nguồn.
   - *Sửa danh sách dịch vụ ảnh*: tên miền mà link trỏ tới *trang xem ảnh* (chứ không phải file ảnh). Script mở trang đó ngầm để lấy file thật. Mục không có dấu chấm (vd `zpic`) khớp mọi tên miền chứa chuỗi đó. Gặp dịch vụ mới thì thêm vào đây.
   - *Tải lại chủ đề này (bỏ qua bộ nhớ đệm)*: tải lại mọi trang và mọi link, dùng khi bài ở các trang cũ đã bị sửa hoặc xoá.

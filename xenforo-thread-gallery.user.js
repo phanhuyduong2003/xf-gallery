@@ -78,8 +78,10 @@
       scroll: 'Scroll', scrollTip: 'Vertical scroll',
       stop: 'Stop loading', stopShort: 'Stop', stopTip: 'Stop loading the remaining pages',
       options: 'Options', close: 'Close (Esc)', prev: 'Previous (←)', next: 'Next (→)',
-      optLabel: 'Show poster info on videos (I)',
-      optLabelImg: 'Show poster info on images too',
+      optInfoVideos: 'Show info on videos (I)',
+      optInfoImages: 'Show info on images (I)',
+      fullPost: 'Whole post',
+      inPost: (i, n) => `${i} of ${n} in this post`,
       optDead: 'Show broken items in grid / scroll',
       optHosts: 'Edit image host list…',
       optReload: 'Reload this thread (ignore cache)',
@@ -119,8 +121,10 @@
       scroll: 'Cuộn', scrollTip: 'Cuộn dọc',
       stop: 'Dừng tải', stopShort: 'Dừng', stopTip: 'Dừng tải các trang còn lại',
       options: 'Tuỳ chọn', close: 'Đóng (Esc)', prev: 'Trước (←)', next: 'Sau (→)',
-      optLabel: 'Hiện nhãn người đăng trên video (phím I)',
-      optLabelImg: 'Hiện nhãn người đăng cả trên ảnh',
+      optInfoVideos: 'Hiện thông tin trên video (phím I)',
+      optInfoImages: 'Hiện thông tin trên ảnh (phím I)',
+      fullPost: 'Xem cả bài',
+      inPost: (i, n) => `${i}/${n} trong bài`,
       optDead: 'Hiện mục hỏng ở chế độ lưới / cuộn',
       optHosts: 'Sửa danh sách dịch vụ ảnh…',
       optReload: 'Tải lại chủ đề này (bỏ qua bộ nhớ đệm)',
@@ -181,7 +185,6 @@
     pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
     post: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
-    slides: '<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>',
     image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
     images: '<path d="M18 22H4a2 2 0 0 1-2-2V6"/><path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"/><circle cx="12" cy="8" r="2"/><rect width="16" height="16" x="6" y="2" rx="2"/>',
     grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
@@ -284,6 +287,7 @@
   //   v:<thread>         thread record: last visit, last viewed item
   // ---------------------------------------------------------------------------
   const HOUR = 3600e3, DAY = 24 * HOUR;
+  const CACHE_SCHEMA = 2; // bump when the shape of cached pages changes
   const PAGE_TTL = 12 * HOUR, LINK_TTL = 7 * DAY, DEAD_LINK_TTL = DAY, THUMB_TTL = 7 * DAY, MAX_THREADS = 30;
   const THREAD_ID = (location.href.match(/threads\/(?:[^/?#]*\.)?(\d+)/) || [])[1] || location.pathname;
 
@@ -593,8 +597,9 @@
   function extractPost(post, base) {
     const roots = [post.querySelector(BODY_SEL), post.querySelector('.message-attachments, .attachedFiles')].filter(Boolean);
     const units = [];
+    const anchors = [];      // the element each unit came from (used to find the text next to it)
     const consumed = new Set();
-    const push = (res) => { if (res) units.push(res); };
+    const push = (res, anchor) => { if (res) { units.push(res); anchors.push(anchor); } };
     const SEL = 'img, video, iframe, a[href], blockquote.imgur-embed-pub, [data-media-site-id][data-media-key], [data-s9e-mediaembed-iframe]';
 
     for (const root of roots) {
@@ -622,38 +627,39 @@
           if (origU) cands.push(stripChevereto(origU.href));
           if (shownU) cands.push(stripChevereto(unproxy(new URL(shownU.href)).href), shownU.href); // proxied copy may survive a dead original
           if (origU) cands.push(origU.href);
-          units.push([{ type: 'image', candidates: uniq(cands), thumb: shownU ? shownU.href : undefined, source: (origU || shownU).href }]);
+          push([{ type: 'image', candidates: uniq(cands), thumb: shownU ? shownU.href : undefined, source: (origU || shownU).href }],
+            a && root.contains(a) ? a : node);
         } else if (tag === 'VIDEO') {
           const srcs = [node.getAttribute('src'), node.getAttribute('data-src')];
           node.querySelectorAll('source').forEach((s) => srcs.push(s.getAttribute('src'), s.getAttribute('data-src')));
           const cands = uniq(srcs).map((s) => abs(s, base)).filter(Boolean).map((x) => x.href);
           if (!cands.length) continue;
           const poster = node.getAttribute('poster') || node.getAttribute('data-poster');
-          units.push([{ type: 'video', candidates: cands, thumb: poster ? abs(poster, base).href : undefined, source: cands[0] }]);
+          push([{ type: 'video', candidates: cands, thumb: poster ? abs(poster, base).href : undefined, source: cands[0] }], node);
         } else if (tag === 'IFRAME' || node.hasAttribute('data-s9e-mediaembed-iframe')) {
           const s = iframeSrc(node);
           if (!s) continue;
           node.querySelectorAll('iframe').forEach((f) => consumed.add(f));
           const res = resolveLink(s, base);
           const x = abs(s, base);
-          push(res || (x && [{ type: 'embed', url: x.href, source: x.href }]));
+          push(res || (x && [{ type: 'embed', url: x.href, source: x.href }]), node);
         } else if (node.hasAttribute('data-media-site-id')) {
           node.querySelectorAll('iframe, a, img, video').forEach((c) => consumed.add(c));
           const inner = node.querySelector('iframe');
           const site = MEDIA_SITES[node.getAttribute('data-media-site-id')];
           const url = (inner && iframeSrc(inner)) || (site && site(node.getAttribute('data-media-key')));
-          if (url) push(resolveLink(url, base));
+          if (url) push(resolveLink(url, base), node);
         } else if (tag === 'BLOCKQUOTE') {
           node.querySelectorAll('a').forEach((c) => consumed.add(c));
           const id = node.getAttribute('data-id');
-          if (id) push(resolveLink('https://imgur.com/' + id, base));
+          if (id) push(resolveLink('https://imgur.com/' + id, base), node);
         } else if (tag === 'A' && !node.querySelector('img, video')) { // linked images are handled via the <img>
           const href = node.getAttribute('href');
-          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) push(resolveLink(href, base));
+          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) push(resolveLink(href, base), node);
         }
       }
     }
-    return units;
+    return { units, anchors };
   }
 
   // ---------------------------------------------------------------------------
@@ -664,10 +670,8 @@
     return n ? n.textContent.trim() : null;
   }
 
-  function postText(post) {
-    const body = post.querySelector(BODY_SEL);
-    if (!body) return '';
-    const c = body.cloneNode(true);
+  // Plain text of a cloned post body: quotes, media, bare links and media-link text removed
+  function cleanText(c) {
     c.querySelectorAll('.bbCodeBlock--quote, blockquote, script, style, img, video, iframe, .bbMediaWrapper, .bbMediaJustifier, ' +
       '[data-s9e-mediaembed], [data-media-site-id], .bbCodeBlock--unfurl, .bbCodeSpoiler-button, .messageTextEndMarker').forEach((n) => n.remove());
     c.querySelectorAll('a').forEach((a) => {
@@ -676,7 +680,41 @@
     });
     c.querySelectorAll('br').forEach((b) => b.replaceWith('\n'));
     c.querySelectorAll('div, p, li, h1, h2, h3, h4').forEach((d) => d.append('\n'));
-    return c.textContent.replace(/[ \t ]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{2,}/g, '\n').trim().slice(0, 2000);
+    return c.textContent.replace(/[ \t ]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{2,}/g, '\n').trim();
+  }
+
+  function postText(post) {
+    const body = post.querySelector(BODY_SEL);
+    return body ? cleanText(body.cloneNode(true)).slice(0, 2000) : '';
+  }
+
+  // Caption for each media item of a post with several items: the text right next to it.
+  // The post text is split at every item; if the post starts with text (or ends with none), captions
+  // are taken to sit above their item, otherwise below it. Items without their own text share the
+  // nearest caption in that direction. Returns null for items where the whole post text should be used.
+  function mediaCaptions(post, anchors) {
+    const none = anchors.map(() => null);
+    const body = post.querySelector(BODY_SEL);
+    if (!body) return none;
+    const marked = anchors.map((a) => !!(a && body.contains(a)));
+    if (marked.filter(Boolean).length < 2) return none;
+    anchors.forEach((a, i) => { if (marked[i]) a.setAttribute('data-xtg-a', i); });
+    const c = body.cloneNode(true);
+    anchors.forEach((a, i) => { if (marked[i]) a.removeAttribute('data-xtg-a'); });
+    c.querySelectorAll('[data-xtg-a]').forEach((n) => n.replaceWith(`\u0001${n.getAttribute('data-xtg-a')}\u0002`));
+    const parts = cleanText(c).split(/\u0001(\d+)\u0002/);
+    const segs = [], order = [];
+    parts.forEach((part, i) => { if (i % 2) order.push(+part); else segs.push(part.trim()); });
+    const n = order.length;
+    if (n < 2) return none;
+    const below = !segs[0] && !!segs[n];
+    const out = none.slice();
+    order.forEach((unit, j) => {
+      if (below) { for (let k = j + 1; k <= n; k++) if (segs[k]) { out[unit] = segs[k]; break; } }
+      else { for (let k = j; k >= 0; k--) if (segs[k]) { out[unit] = segs[k]; break; } }
+      if (out[unit]) out[unit] = out[unit].slice(0, 2000);
+    });
+    return out;
   }
 
   function postMeta(post, base) {
@@ -710,15 +748,15 @@
     stopped: false,
     view: store.get('view', 'viewer'),         // viewer | grid | list
     showDead: false,
-    showLabel: store.get('showLabel', true),
-    labelImages: store.get('labelImages', false),
+    infoVideos: store.get('infoVideos', store.get('showLabel', true)),
+    infoImages: store.get('infoImages', true),
     muted: store.get('muted', false),
     threadStarter: null,
     starterFromHeader: false,
     cur: null,               // item shown in the viewer
     userMoved: false,        // user navigated, so stop auto-jumping to earlier items
     lastDir: 1,
-    slideshow: false,
+    slideshow: store.get('autoplay', true), // autoplay is on by default; the choice is remembered
     slideTimer: null,
     unwireVideo: null,
     gen: 0,                  // bumped by "Reload" so late results of the previous load are ignored
@@ -769,7 +807,7 @@
 .xtg-viewer{position:absolute;inset:0;display:flex;flex-direction:column}
 .xtg-viewer[hidden],.xtg-scroll[hidden]{display:none}
 .xtg-stagebox{flex:1;min-height:0;position:relative;display:flex}
-.xtg-stage{flex:1;min-width:0;min-height:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+.xtg-stage{flex:1;min-width:0;min-height:0;padding:0 78px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
   user-select:none;-webkit-user-select:none;touch-action:none}
 .xtg-stage>img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;transition:transform .2s;will-change:transform}
 .xtg-stage>img.zoomed{cursor:grab}
@@ -786,7 +824,9 @@
 .xtg-nav:disabled{opacity:.3;pointer-events:none}
 .xtg-prev{left:14px}.xtg-next{right:14px}
 .xtg-prev .xtg-i{margin-right:2px}.xtg-next .xtg-i{margin-left:2px}
-.xtg-strip{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;border-top:1px solid #24262c;background:#0f1013;
+.xtg-stripbar{display:flex;align-items:center;border-top:1px solid #24262c;background:#0f1013}
+.xtg-snav{display:none}
+.xtg-strip{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;padding:8px 10px;
   scrollbar-width:thin;scrollbar-color:#3a3d44 transparent;min-height:72px}
 .xtg-th{flex:0 0 auto;width:72px;height:54px;border-radius:5px;overflow:hidden;cursor:pointer;position:relative;opacity:.5;
   outline:2px solid transparent;outline-offset:-2px;background:#1b1d21}
@@ -828,6 +868,22 @@
 .xtg-reel-vid{padding-bottom:0;background:linear-gradient(transparent 70%,rgba(0,0,0,.14));transition:background .25s}
 .xtg-show .xtg-reel-vid{background:linear-gradient(transparent,rgba(0,0,0,.14) 40%,rgba(0,0,0,.4))}
 .xtg-reel-info,.xtg-vrow{transition:opacity .25s}
+.xtg-reel-img{background:transparent;transition:background .25s}
+.xtg-show .xtg-reel-img{background:linear-gradient(transparent,rgba(0,0,0,.14) 40%,rgba(0,0,0,.4))}
+.xtg-reel-img .xtg-reel-info{opacity:0}
+.xtg-show .xtg-reel-img .xtg-reel-info{opacity:1}
+.xtg-stage:not(.xtg-show) .xtg-reel-img:not(.xtg-touchinfo) *{pointer-events:none}
+.xtg-reel-img.xtg-touchinfo{pointer-events:auto;padding-top:28px;background:linear-gradient(transparent,rgba(0,0,0,.18) 35%,rgba(0,0,0,.5))}
+.xtg-reel-img.xtg-touchinfo .xtg-reel-info{opacity:1}
+.xtg-compact .xtg-av{width:26px;height:26px;border-width:1.5px}
+.xtg-compact .xtg-av-txt{font-size:13px}
+.xtg-compact .xtg-name{font-size:14px}
+.xtg-compact .xtg-text{margin-top:4px;font-size:13px;-webkit-line-clamp:1}
+.xtg-compact .xtg-btns,.xtg-compact .xtg-date,.xtg-compact .xtg-text.xtg-full-text{display:none}
+.xtg-btns{display:flex;gap:14px;margin-top:2px}
+.xtg-text.xtg-full-text{display:none}
+.xtg-showfull .xtg-text.xtg-cap-text{display:none}
+.xtg-showfull .xtg-text.xtg-full-text{display:block;-webkit-line-clamp:unset;max-height:40vh;overflow:auto;pointer-events:auto}
 .xtg-reel-vid .xtg-reel-info,.xtg-reel-vid .xtg-vrow{opacity:0}
 .xtg-show .xtg-reel-vid .xtg-reel-info,.xtg-show .xtg-reel-vid .xtg-vrow{opacity:1}
 .xtg-stage:not(.xtg-show) .xtg-reel-vid *{pointer-events:none}
@@ -869,17 +925,22 @@ a.xtg-name:hover{text-decoration:underline}
 .xtg-text{margin-top:8px;font-size:14px;line-height:1.45;white-space:pre-line;word-break:break-word;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .xtg-expanded .xtg-text{display:block;-webkit-line-clamp:unset;max-height:40vh;overflow:auto;pointer-events:auto}
-.xtg-more{margin-top:2px;padding:0;border:0;background:none;color:rgba(255,255,255,.85);font:600 13px system-ui,sans-serif;cursor:pointer}
-.xtg-more:hover{color:#fff;text-decoration:underline}
+.xtg-more,.xtg-full{margin-top:2px;padding:0;border:0;background:none;color:rgba(255,255,255,.85);font:600 13px system-ui,sans-serif;cursor:pointer}
+.xtg-more:hover,.xtg-full:hover{color:#fff;text-decoration:underline}
 .xtg-post{width:100%;max-width:960px;padding:10px 12px;background:#1a1c21;border-radius:8px 8px 0 0;color:#e8e8ea}
 .xtg-post .xtg-av{border-color:#3a3d44}
 .xtg-post .xtg-text{text-shadow:none}
 @media (max-width:700px){
   .xtg-modal{width:100vw;height:100vh;height:100dvh;border-radius:0}
   .xtg-grid{grid-template-columns:repeat(auto-fill,minmax(105px,1fr))}
-  .xtg-nav{width:44px;height:44px;background:rgba(12,13,16,.68)}
-  .xtg-nav .xtg-i{width:24px;height:24px}
-  .xtg-prev{left:8px}.xtg-next{right:8px}
+  /* phones: prev/next sit at both ends of the filmstrip, so nothing covers the media */
+  .xtg-nav{display:none}
+  .xtg-stage{padding:0}
+  .xtg-snav{display:flex;align-items:center;justify-content:center;flex:0 0 44px;align-self:stretch;padding:0;border:0;
+    background:none;color:#e8e8ea;cursor:pointer}
+  .xtg-snav:active{background:#1b1d22}
+  .xtg-snav:disabled{opacity:.25;pointer-events:none}
+  .xtg-strip{padding:8px 2px}
   /* toolbar: row 1 = counter, status, stop, close; row 2 = labelled tools, icon above label */
   .xtg-top{padding:4px 4px 0 12px;gap:0}
   .xtg-head{order:1;height:40px}
@@ -923,15 +984,15 @@ a.xtg-name:hover{text-decoration:underline}
               ${btn('data-view="list"', ic('rows', 16), tr('scroll'), tr('scrollTip'))}
             </span>
             <span class="xtg-sep"></span>
-            ${btn('data-act="play"', `<span class="xtg-pi">${ic('slides', 16)}</span>`, tr('slideshow'), tr('slideshowTip'), tr('slideshowShort'))}
+            ${btn('data-act="play"', `<span class="xtg-pi">${ic('play', 16, true)}</span>`, tr('slideshow'), tr('slideshowTip'), tr('slideshowShort'))}
             <a class="xtg-ib" data-act="post" target="_blank" rel="noopener" title="${esc(tr('postTip'))}">${ic('post', 16)}<span class="xtg-lbl">${esc(tr('post'))}</span></a>
             <a class="xtg-ib" data-act="src" target="_blank" rel="noopener noreferrer" title="${esc(tr('sourceTip'))}">${ic('link', 16)}<span class="xtg-lbl">${esc(tr('source'))}</span></a>
             ${btn('data-act="menu"', ic('settings', 16), tr('options'), tr('options'))}
           </div>
           <button class="xtg-ib xtg-close" data-act="close" title="${esc(tr('close'))}" aria-label="${esc(tr('close'))}">${ic('x', 20)}</button>
           <div class="xtg-menu" hidden>
-            <label><input type="checkbox" data-opt="label"> ${esc(tr('optLabel'))}</label>
-            <label><input type="checkbox" data-opt="labelImages"> ${esc(tr('optLabelImg'))}</label>
+            <label><input type="checkbox" data-opt="infoVideos"> ${esc(tr('optInfoVideos'))}</label>
+            <label><input type="checkbox" data-opt="infoImages"> ${esc(tr('optInfoImages'))}</label>
             <label><input type="checkbox" data-opt="dead"> ${esc(tr('optDead'))}</label>
             <button data-act="reload">${esc(tr('optReload'))}</button>
             <button data-act="hosts">${esc(tr('optHosts'))}</button>
@@ -944,7 +1005,11 @@ a.xtg-name:hover{text-decoration:underline}
               <button class="xtg-nav xtg-prev" title="${esc(tr('prev'))}" aria-label="${esc(tr('prev'))}">${ic('left', 28)}</button>
               <button class="xtg-nav xtg-next" title="${esc(tr('next'))}" aria-label="${esc(tr('next'))}">${ic('right', 28)}</button>
             </div>
-            <div class="xtg-strip"></div>
+            <div class="xtg-stripbar">
+              <button class="xtg-snav xtg-sprev" data-nav="-1" title="${esc(tr('prev'))}" aria-label="${esc(tr('prev'))}">${ic('left', 22)}</button>
+              <div class="xtg-strip"></div>
+              <button class="xtg-snav xtg-snext" data-nav="1" title="${esc(tr('next'))}" aria-label="${esc(tr('next'))}">${ic('right', 22)}</button>
+            </div>
           </div>
           <div class="xtg-scroll" hidden>
             <div class="xtg-grid xtg-hide-dead"></div>
@@ -957,16 +1022,19 @@ a.xtg-name:hover{text-decoration:underline}
     ui = {
       root, modal: q('.xtg-modal'), counter: q('.xtg-counter'), status: q('.xtg-status'),
       playBtn: q('[data-act="play"]'), postLink: q('[data-act="post"]'), srcLink: q('[data-act="src"]'),
-      stopBtn: q('[data-act="stop"]'), menu: q('.xtg-menu'), prevBtn: q('.xtg-prev'), nextBtn: q('.xtg-next'),
+      stopBtn: q('[data-act="stop"]'), menu: q('.xtg-menu'),
+      prevBtns: root.querySelectorAll('.xtg-prev, .xtg-sprev'), nextBtns: root.querySelectorAll('.xtg-next, .xtg-snext'),
       viewer: q('.xtg-viewer'), stage: q('.xtg-stage'), strip: q('.xtg-strip'),
       scroll: q('.xtg-scroll'), grid: q('.xtg-grid'), empty: q('.xtg-empty'),
     };
 
     root.addEventListener('click', (e) => {
-      const more = e.target.closest('.xtg-more');
+      const more = e.target.closest('.xtg-more, .xtg-full');
       if (more) {
-        const box = more.parentElement;
-        more.textContent = box.classList.toggle('xtg-expanded') ? tr('less') : tr('more');
+        const box = more.closest('.xtg-reel-info, .xtg-post');
+        if (more.classList.contains('xtg-full')) more.textContent = box.classList.toggle('xtg-showfull') ? tr('less') : tr('fullPost');
+        else more.textContent = box.classList.toggle('xtg-expanded') ? tr('less') : tr('more');
+        positionOverlay();
         e.stopPropagation();
         return;
       }
@@ -987,22 +1055,19 @@ a.xtg-name:hover{text-decoration:underline}
     });
 
     const opt = (name) => q(`[data-opt="${name}"]`);
-    opt('label').checked = S.showLabel;
-    opt('labelImages').checked = S.labelImages;
-    opt('label').addEventListener('change', (e) => setShowLabel(e.target.checked));
-    opt('labelImages').addEventListener('change', (e) => {
-      S.labelImages = e.target.checked;
-      store.set('labelImages', S.labelImages);
-      refreshLabels();
+    ['infoVideos', 'infoImages'].forEach((kind) => {
+      opt(kind).checked = S[kind];
+      opt(kind).addEventListener('change', (e) => setInfo(kind, e.target.checked));
     });
     opt('dead').addEventListener('change', (e) => {
       S.showDead = e.target.checked;
       ui.grid.classList.toggle('xtg-hide-dead', !S.showDead);
     });
-    ui.prevBtn.onclick = () => step(-1, true);
-    ui.nextBtn.onclick = () => step(1, true);
+    ui.prevBtns.forEach((b) => { b.onclick = () => step(-1, true); });
+    ui.nextBtns.forEach((b) => { b.onclick = () => step(1, true); });
     new ResizeObserver(positionOverlay).observe(ui.stage);
     setupStageGestures();
+    setSlideshow(S.slideshow, false);
     document.addEventListener('keydown', onKey, true);
     applyView();
   }
@@ -1020,7 +1085,11 @@ a.xtg-name:hover{text-decoration:underline}
       if (k === 'm') { S.videoCtl.mute(); return; }
       if (k === 'f') { toggleFullscreen(); return; }
     }
-    if (k === 'i') { setShowLabel(!S.showLabel); return; }
+    if (k === 'i') { // toggles the info of the kind being viewed
+      const kind = S.cur && S.cur.type === 'image' ? 'infoImages' : 'infoVideos';
+      setInfo(kind, !S[kind]);
+      return;
+    }
     if (k === 'g') { setView(S.view === 'grid' ? 'viewer' : 'grid'); return; }
     if (S.view !== 'viewer') return;
     if (k === 'ArrowRight') { step(1, true); e.preventDefault(); }
@@ -1070,8 +1139,8 @@ a.xtg-name:hover{text-decoration:underline}
     ui.stopBtn.hidden = !loading;
     const pos = S.cur && !S.cur.dead ? live.indexOf(S.cur) : -1;
     ui.counter.textContent = `${pos + 1} / ${live.length}`;
-    ui.prevBtn.disabled = pos <= 0;
-    ui.nextBtn.disabled = pos < 0 || pos >= live.length - 1;
+    ui.prevBtns.forEach((b) => { b.disabled = pos <= 0; });
+    ui.nextBtns.forEach((b) => { b.disabled = pos < 0 || pos >= live.length - 1; });
     const msg = loading ? tr('searching') : tr('none');
     ui.empty.textContent = msg;
     ui.empty.style.display = live.length ? 'none' : '';
@@ -1109,7 +1178,7 @@ a.xtg-name:hover{text-decoration:underline}
       (spec.candidates || []).slice(1).forEach((c) => S.keys.add(keyOf(c)));
     }
     const item = Object.assign({ candidates: [] }, spec, {
-      key, pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, dead: spec.type === 'dead',
+      key, pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, caption: ctx.caption || null, dead: spec.type === 'dead',
     });
     if (item.dead) item.type = 'image';
 
@@ -1159,11 +1228,15 @@ a.xtg-name:hover{text-decoration:underline}
   // Parse a thread page into plain, cacheable data. Links that need a network lookup are kept as
   // { link } and resolved when the page is replayed (usually straight from the link cache).
   function parsePage(doc, pageUrl) {
-    return getPosts(doc).map((post) => ({
-      postId: postIdOf(post),
-      meta: postMeta(post, pageUrl),
-      units: extractPost(post, pageUrl).map((u) => (Array.isArray(u) ? u : { link: u.source })),
-    }));
+    return getPosts(doc).map((post) => {
+      const { units, anchors } = extractPost(post, pageUrl);
+      return {
+        postId: postIdOf(post),
+        meta: postMeta(post, pageUrl),
+        units: units.map((u) => (Array.isArray(u) ? u : { link: u.source })),
+        captions: mediaCaptions(post, anchors),
+      };
+    });
   }
 
   function replayPage(posts, page, pageUrl) {
@@ -1172,7 +1245,7 @@ a.xtg-name:hover{text-decoration:underline}
       const ctx = { page, postId: post.postId, pageUrl, meta: post.meta };
       post.units.forEach((unit, k) => {
         const u = unit.link ? resolveLink(unit.link, pageUrl) : unit;
-        if (u) handleUnit(u, [page, pi, k], ctx);
+        if (u) handleUnit(u, [page, pi, k], Object.assign({}, ctx, { caption: (post.captions && post.captions[k]) || null }));
       });
     });
   }
@@ -1444,7 +1517,7 @@ a.xtg-name:hover{text-decoration:underline}
   // Poster label
   // ---------------------------------------------------------------------------
   const sameName = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
-  const showsLabel = (item) => S.showLabel && !item.dead && !!(item.meta && item.meta.author) && (item.type !== 'image' || S.labelImages);
+  const showsLabel = (item) => !item.dead && !!(item.meta && item.meta.author) && (item.type === 'image' ? S.infoImages : S.infoVideos);
 
   function nameColor(name) {
     let h = 0;
@@ -1466,10 +1539,20 @@ a.xtg-name:hover{text-decoration:underline}
     const name = m.profile
       ? `<a class="xtg-name" href="${esc(m.profile)}" target="_blank" rel="noopener">${esc(m.author)}</a>`
       : `<span class="xtg-name">${esc(m.author)}</span>`;
+    const siblings = S.items.filter((x) => !x.dead && x.page === item.page && x.postId === item.postId);
+    const where = siblings.length > 1 ? `<span class="xtg-date">${esc(tr('inPost', siblings.indexOf(item) + 1, siblings.length))}</span>` : '';
     const date = m.date ? `<span class="xtg-date">${esc(m.date)}</span>` : '';
-    const long = m.text && (m.text.length > 110 || m.text.includes('\n'));
-    const text = m.text ? `<div class="xtg-text">${esc(m.text)}</div>${long ? `<button class="xtg-more">${esc(tr('more'))}</button>` : ''}` : '';
-    return `<div class="xtg-who">${avatar}<div class="xtg-line">${name}${withTag ? roleTagHTML(item) : ''}${date}</div></div>${text}`;
+    const shown = item.caption || m.text;
+    const hasFull = !!(item.caption && m.text && item.caption !== m.text);
+    const long = shown && (shown.length > 110 || shown.includes('\n'));
+    const buttons = (long ? `<button class="xtg-more">${esc(tr('more'))}</button>` : '') +
+      (hasFull ? `<button class="xtg-full">${esc(tr('fullPost'))}</button>` : '');
+    const text = shown
+      ? `<div class="xtg-text xtg-cap-text">${esc(shown)}</div>` +
+        (hasFull ? `<div class="xtg-text xtg-full-text">${esc(m.text)}</div>` : '') +
+        (buttons ? `<div class="xtg-btns">${buttons}</div>` : '')
+      : '';
+    return `<div class="xtg-who">${avatar}<div class="xtg-line">${name}${withTag ? roleTagHTML(item) : ''}${date}${where}</div></div>${text}`;
   }
 
   function setCornerTag(item) {
@@ -1505,7 +1588,7 @@ a.xtg-name:hover{text-decoration:underline}
     const isVid = media.tagName === 'VIDEO';
     const label = showsLabel(item);
     if (!label && !isVid) return;
-    const reel = el('div', { className: 'xtg-reel' + (isVid ? ' xtg-reel-vid' : '') });
+    const reel = el('div', { className: 'xtg-reel ' + (isVid ? 'xtg-reel-vid' : 'xtg-reel-img') });
     reel.innerHTML = (label ? `<div class="xtg-reel-info">${posterHTML(item, false)}</div>` : '') + (isVid ? `
       <div class="xtg-vbar">
         <div class="xtg-vrow">
@@ -1522,16 +1605,50 @@ a.xtg-name:hover{text-decoration:underline}
     if (isVid) {
       ui.stage.insertAdjacentHTML('beforeend', `<div class="xtg-bigplay">${ic('play', 32, true)}</div>`);
       wireVideo(media, reel);
+    } else {
+      wireImageInfo(media, reel);
     }
     media.addEventListener(isVid ? 'loadedmetadata' : 'load', positionOverlay);
     new ResizeObserver(positionOverlay).observe(media);
     requestAnimationFrame(positionOverlay);
   }
 
-  function setShowLabel(on) {
-    S.showLabel = on;
-    store.set('showLabel', on);
-    const cb = ui.root.querySelector('[data-opt="label"]');
+  // Images: on desktop the info appears while the mouse is over the image; on touch screens a compact
+  // line (name + one line of text) is always shown and a tap expands it.
+  function wireImageInfo(img, reel) {
+    if (!matchMedia('(hover: hover)').matches) {
+      reel.classList.add('xtg-touchinfo', 'xtg-compact');
+      reel.addEventListener('click', (e) => {
+        if (e.target.closest('a, button')) return;
+        reel.classList.toggle('xtg-compact');
+        positionOverlay();
+      });
+      return;
+    }
+    let hovering = false;
+    const inside = (node, e) => {
+      const r = node.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    };
+    const onMove = (e) => {
+      if (e.pointerType !== 'mouse') return;
+      const h = inside(img, e) || inside(reel, e);
+      if (h !== hovering) { hovering = h; ui.stage.classList.toggle('xtg-show', h); }
+    };
+    const onLeave = () => { hovering = false; ui.stage.classList.remove('xtg-show'); };
+    ui.stage.addEventListener('pointermove', onMove);
+    ui.stage.addEventListener('pointerleave', onLeave);
+    S.unwireVideo = () => {
+      ui.stage.removeEventListener('pointermove', onMove);
+      ui.stage.removeEventListener('pointerleave', onLeave);
+      ui.stage.classList.remove('xtg-show');
+    };
+  }
+
+  function setInfo(kind, on) {
+    S[kind] = on;
+    store.set(kind, on);
+    const cb = ui.root.querySelector(`[data-opt="${kind}"]`);
     if (cb) cb.checked = on;
     refreshLabels();
   }
@@ -1670,7 +1787,7 @@ a.xtg-name:hover{text-decoration:underline}
     if (v === 'viewer') {
       renderStage();
     } else {
-      stopSlideshow();
+      clearTimeout(S.slideTimer); // autoplay resumes when coming back to View
       ui.stage.querySelectorAll('video').forEach((x) => x.pause());
       if (S.cur && S.cur.el) S.cur.el.scrollIntoView({ block: 'center' });
     }
@@ -1859,16 +1976,18 @@ a.xtg-name:hover{text-decoration:underline}
     S.slideTimer = setTimeout(nextOrStop, item.type === 'embed' ? SLIDE_EMBED_MS : SLIDE_MS);
   }
 
-  function setSlideshow(on) {
+  // remember = false: a temporary stop (end of the list) that keeps the saved preference
+  function setSlideshow(on, remember = true) {
     S.slideshow = on;
+    if (remember) store.set('autoplay', on);
     clearTimeout(S.slideTimer);
     if (!ui) return;
     ui.playBtn.classList.toggle('on', on);
-    ui.playBtn.querySelector('.xtg-pi').innerHTML = on ? ic('pause', 16, true) : ic('slides', 16);
+    ui.playBtn.querySelector('.xtg-pi').innerHTML = on ? ic('pause', 16, true) : ic('play', 16, true);
     if (on) scheduleSlide();
   }
   const toggleSlideshow = () => setSlideshow(!S.slideshow);
-  const stopSlideshow = () => setSlideshow(false);
+  const stopSlideshow = () => setSlideshow(false, false);
 
   // ---------------------------------------------------------------------------
   // Loading the whole thread
@@ -1906,13 +2025,13 @@ a.xtg-name:hover{text-decoration:underline}
           posts = parsePage(document, url);
         } else if (p !== S.totalPages && !S.noCache) {
           const hit = await cache.get(key, PAGE_TTL);
-          if (hit) { posts = hit.posts; S.pagesCached++; }
+          if (hit && hit.v === CACHE_SCHEMA) { posts = hit.posts; S.pagesCached++; }
         }
         if (!posts) {
           posts = parsePage(await fetchDoc(url), url);
           fetched = true;
         }
-        if (p === cur || fetched) cache.put(key, { posts });
+        if (p === cur || fetched) cache.put(key, { posts, v: CACHE_SCHEMA });
         if (!S.stopped && gen === S.gen) replayPage(posts, p, url);
       } catch (e) {
         S.pageErrors++;
@@ -1930,7 +2049,7 @@ a.xtg-name:hover{text-decoration:underline}
   async function reloadThread() {
     ui.menu.hidden = true;
     S.gen++;
-    stopSlideshow();
+    clearTimeout(S.slideTimer);
     await cache.dropPrefix(`p:${THREAD_ID}:`);
     Object.assign(S, {
       items: [], keys: new Set(), pending: 0, pagesDone: 0, pagesCached: 0, pageErrors: 0,
@@ -1961,7 +2080,7 @@ a.xtg-name:hover{text-decoration:underline}
   }
 
   function closeGallery() {
-    stopSlideshow();
+    clearTimeout(S.slideTimer); // pause only: the autoplay setting stays
     ui.stage.querySelectorAll('video').forEach((x) => x.pause());
     ui.stage.querySelectorAll('iframe').forEach((x) => x.remove()); // stop embedded players
     ui.root.classList.remove('xtg-open');

@@ -25,12 +25,13 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
   - Máy tính: di chuột vào video để hiện thông tin người đăng và nút điều khiển.
   - Điện thoại: chạm để tạm dừng rồi tua.
   - Phím tắt: **K** phát/tạm dừng, **M** tắt tiếng, **F** toàn màn hình.
-- **Nhãn người đăng**
+- **Thông tin người đăng trên ảnh và video**
   - Nhãn **Tác giả chủ đề** / **Thành viên** ở góc trên trái.
-  - Ảnh đại diện, tên, ngày đăng và nội dung bài viết (đã bỏ phần trích dẫn và link trần).
-  - Phím **I** để bật/tắt.
+  - Ảnh đại diện, tên, ngày đăng và nội dung (đã bỏ phần trích dẫn và link trần). Trên máy tính, di chuột vào mới hiện; trên điện thoại, ảnh hiện một dòng thu gọn, chạm để mở rộng.
+  - Bài có nhiều ảnh/video: **mỗi mục lấy đoạn chữ nằm sát nó** ("Ảnh 1: …", "Ảnh 2: …"), kèm vị trí trong bài và nút *Xem cả bài*.
+  - Công tắc riêng cho ảnh và video; phím **I** để bật/tắt.
 - **Ảnh thu nhỏ cho video.** Video nào chưa có, script tự chụp một khung hình, hỏi qua oEmbed / RedGifs, hoặc đọc `og:image`.
-- **Tự động phát** (phím Space). Ảnh tự chuyển sau 3,5 giây; video chuyển khi phát xong.
+- **Tự động phát** (phím Space), mặc định bật. Ảnh tự chuyển sau 3,5 giây; video chuyển khi phát xong.
 - **Giao diện tiếng Việt và tiếng Anh**, tự chọn theo ngôn ngữ trình duyệt.
 - Nhẹ: không dùng thư viện ngoài. Icon là SVG của [Lucide](https://lucide.dev) (giấy phép ISC) nhúng sẵn.
 
