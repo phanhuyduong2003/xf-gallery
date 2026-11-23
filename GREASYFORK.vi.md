@@ -19,6 +19,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
   - Dịch vụ khác do bạn thêm vào danh sách: script đọc thẻ `og:image` / `og:video` của trang.
 - **Bỏ qua ảnh/video đã chết.** Link hỏng, lỗi 404 và ảnh giữ chỗ "đã bị xoá" được ẩn đi (có thể bật lại trong tuỳ chọn). Ảnh bị chặn hotlink được tải qua trình quản lý userscript. Lỗi mạng chập chờn được thử lại một lần.
 - **Không trùng lặp.** Ảnh bị trích dẫn lại ở các bài sau chỉ hiện một lần.
+- **Có bộ nhớ đệm, mở đúng chỗ đang đọc.** Các trang và kết quả link được lưu trong trình duyệt, nên chuyển từ trang 1 sang trang 2 không phải tải lại cả chủ đề: chỉ tải lại trang cuối. Album mở ở ảnh/video đầu tiên của trang đang đọc (hoặc mục đang xem dở trên trang đó).
 - **Trình phát video kiểu Reels**
   - Bình thường chỉ hiện thanh tiến trình mảnh, không che video.
   - Máy tính: di chuột vào video để hiện thông tin người đăng và nút điều khiển.
@@ -48,6 +49,6 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 
 - Chạy trên XenForo 1.x và 2.x với địa chỉ chủ đề có chữ `threads/`. Nếu diễn đàn dùng địa chỉ khác, thêm một dòng `// @match https://ten-dien-dan.com/*` vào phần đầu script.
 - **Tampermonkey hỏi "Một tập lệnh người dùng muốn truy cập một tài nguyên xuyên nguồn gốc"**: script cần tải file và trang từ các dịch vụ lưu ảnh. Bấm **Luôn cho phép tất cả các tên miền** (*Always allow all domains*) để không bị hỏi lại với từng dịch vụ. Nếu lỡ chọn nút khác: mở bảng điều khiển Tampermonkey → script này → thẻ **Cài đặt** (*Settings*) → **Bảo mật XHR** (*XHR Security*) → **User domain whitelist**, thêm một dòng `*` rồi lưu.
-- Tuỳ chọn (kiểu xem, tắt tiếng, nhãn, danh sách dịch vụ ảnh) được lưu riêng cho từng diễn đàn trong `localStorage`.
+- Tuỳ chọn (kiểu xem, tắt tiếng, nhãn, danh sách dịch vụ ảnh) được lưu riêng cho từng diễn đàn trong `localStorage`; bộ nhớ đệm nằm trong IndexedDB (30 chủ đề gần nhất). **Tuỳ chọn → Tải lại chủ đề này** để bỏ qua bộ nhớ đệm.
 - Ảnh/video đã bị xoá khỏi nơi lưu thì không lấy lại được, chỉ được ẩn đi.
 - Với trình phát nhúng (YouTube…), script không kiểm tra được video còn hay đã bị xoá.

@@ -81,6 +81,8 @@
       optLabelImg: 'Show poster info on images too',
       optDead: 'Show broken items in grid / scroll',
       optHosts: 'Edit image host list…',
+      optReload: 'Reload this thread (ignore cache)',
+      fromCache: (n) => ` · ${plural(n, 'page', 'pages')} from cache`,
       searching: 'Looking for images and videos…',
       none: 'No images or videos found.',
       loading: 'Loading…',
@@ -120,6 +122,8 @@
       optLabelImg: 'Hiện nhãn người đăng cả trên ảnh',
       optDead: 'Hiện mục hỏng ở chế độ lưới / cuộn',
       optHosts: 'Sửa danh sách dịch vụ ảnh…',
+      optReload: 'Tải lại chủ đề này (bỏ qua bộ nhớ đệm)',
+      fromCache: (n) => ` · ${n} trang từ bộ nhớ đệm`,
       searching: 'Đang tìm ảnh và video…',
       none: 'Không tìm thấy ảnh hoặc video nào.',
       loading: 'Đang tải…',
@@ -271,6 +275,75 @@
     throw new Error('blob download failed');
   }
 
+  // ---------------------------------------------------------------------------
+  // Cache (IndexedDB of the forum's origin, one key/value store)
+  //   p:<thread>:<page>  parsed media of one thread page
+  //   l:<link key>       what an image-host link resolved to
+  //   t:<media key>      thumbnail found for a video
+  //   v:<thread>         thread record: last visit, last viewed item
+  // ---------------------------------------------------------------------------
+  const HOUR = 3600e3, DAY = 24 * HOUR;
+  const PAGE_TTL = 12 * HOUR, LINK_TTL = 7 * DAY, DEAD_LINK_TTL = DAY, THUMB_TTL = 7 * DAY, MAX_THREADS = 30;
+  const THREAD_ID = (location.href.match(/threads\/(?:[^/?#]*\.)?(\d+)/) || [])[1] || location.pathname;
+
+  const cache = (() => {
+    let dbPromise = null;
+    const open = () => dbPromise || (dbPromise = new Promise((resolve) => {
+      try {
+        const req = indexedDB.open('xenforo-thread-gallery', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('kv');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = req.onblocked = () => resolve(null);
+      } catch (e) { resolve(null); } // private mode / storage disabled: run without cache
+    }));
+    const run = async (mode, fn) => {
+      const db = await open();
+      if (!db) return null;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('kv', mode);
+          const req = fn(tx.objectStore('kv'));
+          tx.oncomplete = () => resolve(req && 'result' in req ? req.result : null);
+          tx.onerror = tx.onabort = () => resolve(null);
+        } catch (e) { resolve(null); }
+      });
+    };
+    const range = (prefix) => IDBKeyRange.bound(prefix, prefix + '￿');
+    const sweep = (prefix, ttl) => run('readwrite', (store) => {
+      const req = store.openCursor(range(prefix));
+      req.onsuccess = () => {
+        const c = req.result;
+        if (!c) return;
+        if (!c.value || Date.now() - c.value.at > ttl) c.delete();
+        c.continue();
+      };
+    });
+    const api = {
+      async get(key, ttl) {
+        const v = await run('readonly', (store) => store.get(key));
+        return v && (!ttl || Date.now() - v.at < ttl) ? v : null;
+      },
+      put: (key, value) => run('readwrite', (store) => store.put(Object.assign({}, value, { at: Date.now() }), key)),
+      dropPrefix: (prefix) => run('readwrite', (store) => store.delete(range(prefix))),
+      // At most once a day: keep the MAX_THREADS most recent threads and drop expired entries
+      async prune() {
+        if (await api.get('meta:prune', DAY)) return;
+        await api.put('meta:prune', {});
+        const keys = (await run('readonly', (store) => store.getAllKeys(range('v:')))) || [];
+        const vals = (await run('readonly', (store) => store.getAll(range('v:')))) || [];
+        const stale = keys.map((k, i) => [k, (vals[i] || {}).at || 0]).sort((a, b) => b[1] - a[1]).slice(MAX_THREADS);
+        for (const [k] of stale) {
+          await api.dropPrefix('p:' + k.slice(2) + ':');
+          await run('readwrite', (store) => store.delete(k));
+        }
+        await sweep('p:', PAGE_TTL);
+        await sweep('l:', LINK_TTL);
+        await sweep('t:', THUMB_TTL);
+      },
+    };
+    return api;
+  })();
+
   const metaContent = (doc, ...names) => {
     for (const n of names) {
       const m = doc.querySelector(`meta[property="${n}"], meta[name="${n}"]`);
@@ -282,7 +355,8 @@
   // ---------------------------------------------------------------------------
   // Link -> media
   // A "spec" is { type: 'image'|'video'|'embed'|'dead', candidates?, url?, thumb?, source }.
-  // resolveLink returns: spec[] | Promise<spec[] | 'DEAD'> (with .source) | null (not media).
+  // resolveLink returns: spec[] | { source, run() => Promise<spec[] | 'DEAD'> } | null (not media).
+  // Network work only starts when run() is called, and its result is cached per link.
   // ---------------------------------------------------------------------------
   function youtubeId(u) {
     const h = u.hostname.replace(/^www\.|^m\./, '');
@@ -295,7 +369,17 @@
     return null;
   }
 
-  const deferred = (source, job) => Object.assign(resolveQueue(job), { source });
+  const deferred = (source, job) => ({
+    source,
+    run: async () => {
+      const key = 'l:' + keyOf(source);
+      const hit = !S.noCache && await cache.get(key);
+      if (hit && Date.now() - hit.at < (hit.res === 'DEAD' ? DEAD_LINK_TTL : LINK_TTL)) return hit.res;
+      const res = await resolveQueue(job);
+      cache.put(key, { res });
+      return res;
+    },
+  });
 
   function resolveLink(raw, base) {
     let u = abs(raw, base);
@@ -636,6 +720,11 @@
     slideshow: false,
     slideTimer: null,
     unwireVideo: null,
+    gen: 0,                  // bumped by "Reload" so late results of the previous load are ignored
+    noCache: false,          // set by "Reload": ignore cached data for this load
+    pagesCached: 0,
+    startPage: 1,            // the page the user is reading: the gallery opens on its first item
+    resumeKey: null,         // last viewed item, when it is on the page being read
     videoCtl: null,
   };
   let ui = null;
@@ -839,6 +928,7 @@ a.xtg-name:hover{text-decoration:underline}
             <label><input type="checkbox" data-opt="label"> ${esc(tr('optLabel'))}</label>
             <label><input type="checkbox" data-opt="labelImages"> ${esc(tr('optLabelImg'))}</label>
             <label><input type="checkbox" data-opt="dead"> ${esc(tr('optDead'))}</label>
+            <button data-act="reload">${esc(tr('optReload'))}</button>
             <button data-act="hosts">${esc(tr('optHosts'))}</button>
           </div>
         </div>
@@ -884,6 +974,7 @@ a.xtg-name:hover{text-decoration:underline}
         case 'play': toggleSlideshow(); break;
         case 'menu': ui.menu.hidden = !ui.menu.hidden; break;
         case 'hosts': ui.menu.hidden = true; editHosts(); break;
+        case 'reload': reloadThread(); break;
         default: break;
       }
     });
@@ -966,6 +1057,7 @@ a.xtg-name:hover{text-decoration:underline}
     if (dead) st += tr('broken', dead);
     if (loading) st += tr('loadingPages', S.pagesDone, S.totalPages, S.pending);
     else if (S.stopped && S.pagesDone < S.totalPages) st += tr('stopped', S.pagesDone, S.totalPages);
+    if (S.pagesCached) st += tr('fromCache', S.pagesCached);
     if (S.pageErrors) st += tr('pageErrors', S.pageErrors);
     ui.status.textContent = st;
     ui.stopBtn.hidden = !loading;
@@ -990,19 +1082,27 @@ a.xtg-name:hover{text-decoration:underline}
     return 0;
   }
 
+  // Opening item: the last viewed one if it is on the page being read, otherwise the first item of that page
+  const startRank = (item) => (item.page === S.startPage ? 0 : 1);
+  const isBetterStart = (item) => {
+    const a = startRank(item), b = startRank(S.cur);
+    return a < b || (a === b && comparePos(item.pos, S.cur.pos) < 0);
+  };
+
   function addItem(spec, pos, ctx) {
+    let key;
     if (spec.type === 'dead') {
-      const k = 'dead:' + keyOf(spec.source);
-      if (S.keys.has(k)) return;
-      S.keys.add(k);
+      key = 'dead:' + keyOf(spec.source);
+      if (S.keys.has(key)) return;
+      S.keys.add(key);
     } else {
-      const k = keyOf(spec.type === 'embed' ? spec.url : spec.candidates[0]);
-      if (S.keys.has(k)) return;
-      S.keys.add(k);
+      key = keyOf(spec.type === 'embed' ? spec.url : spec.candidates[0]);
+      if (S.keys.has(key)) return;
+      S.keys.add(key);
       (spec.candidates || []).slice(1).forEach((c) => S.keys.add(keyOf(c)));
     }
     const item = Object.assign({ candidates: [] }, spec, {
-      pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, dead: spec.type === 'dead',
+      key, pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, dead: spec.type === 'dead',
     });
     if (item.dead) item.type = 'image';
 
@@ -1020,8 +1120,11 @@ a.xtg-name:hover{text-decoration:underline}
       const nextThumb = after.find((i) => i.thumbEl);
       ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
       if (item.type !== 'image' && !item.thumb) ensureThumb(item);
-      // show the first item, or an earlier one that arrived late, until the user navigates
-      if (!S.cur || (!S.userMoved && comparePos(pos, S.cur.pos) < 0)) showItem(item);
+      // pick the opening item until the user navigates (results arrive out of order)
+      if (!S.userMoved) {
+        if (S.resumeKey && key === S.resumeKey) { S.userMoved = true; showItem(item); }
+        else if (!S.cur || isBetterStart(item)) showItem(item);
+      }
     }
     scheduleStatus();
   }
@@ -1031,21 +1134,39 @@ a.xtg-name:hover{text-decoration:underline}
     const linkKey = 'link:' + keyOf(unit.source);
     if (S.keys.has(linkKey)) return; // same link already being resolved (usually a quote)
     S.keys.add(linkKey);
+    const gen = S.gen;
     S.pending++;
     scheduleStatus();
     const done = (res) => {
+      if (gen !== S.gen) return;
       if (Array.isArray(res) && res.length) res.forEach((spec, i) => addItem(spec, pos.concat(i), ctx));
       else addItem({ type: 'dead', source: unit.source }, pos, ctx);
     };
-    unit.then(done, () => done('DEAD')).finally(() => { S.pending--; scheduleStatus(); });
+    unit.run().then(done, () => done('DEAD')).finally(() => {
+      if (gen !== S.gen) return;
+      S.pending--;
+      scheduleStatus();
+    });
   }
 
-  function processDoc(doc, page, pageUrl) {
-    getPosts(doc).forEach((post, pi) => {
-      const meta = postMeta(post, pageUrl);
-      if (page === 1 && pi === 0) setThreadStarter(meta.author, false);
-      const ctx = { page, postId: postIdOf(post), pageUrl, meta };
-      extractPost(post, pageUrl).forEach((unit, k) => handleUnit(unit, [page, pi, k], ctx));
+  // Parse a thread page into plain, cacheable data. Links that need a network lookup are kept as
+  // { link } and resolved when the page is replayed (usually straight from the link cache).
+  function parsePage(doc, pageUrl) {
+    return getPosts(doc).map((post) => ({
+      postId: postIdOf(post),
+      meta: postMeta(post, pageUrl),
+      units: extractPost(post, pageUrl).map((u) => (Array.isArray(u) ? u : { link: u.source })),
+    }));
+  }
+
+  function replayPage(posts, page, pageUrl) {
+    posts.forEach((post, pi) => {
+      if (page === 1 && pi === 0) setThreadStarter(post.meta.author, false);
+      const ctx = { page, postId: post.postId, pageUrl, meta: post.meta };
+      post.units.forEach((unit, k) => {
+        const u = unit.link ? resolveLink(unit.link, pageUrl) : unit;
+        if (u) handleUnit(u, [page, pi, k], ctx);
+      });
     });
   }
 
@@ -1289,7 +1410,14 @@ a.xtg-name:hover{text-decoration:underline}
     if (item.thumbBusy || (item.thumbTries || 0) >= 2) return;
     item.thumbBusy = true;
     item.thumbTries = (item.thumbTries || 0) + 1;
-    thumbQueue(() => findThumb(item, failed)).then((t) => {
+    (async () => {
+      const key = 't:' + item.key;
+      const hit = !failed && !S.noCache && await cache.get(key, THUMB_TTL);
+      if (hit) return hit.thumb;
+      const t = await thumbQueue(() => findThumb(item, failed));
+      if (t) cache.put(key, { thumb: t });
+      return t;
+    })().then((t) => {
       if (t && t !== item.thumb && !item.dead) {
         item.thumb = t;
         replaceTile(item);
@@ -1629,8 +1757,17 @@ a.xtg-name:hover{text-decoration:underline}
     st.addEventListener('pointercancel', end);
   }
 
+  let viewTimer = null;
+  function rememberView() {
+    clearTimeout(viewTimer);
+    viewTimer = setTimeout(() => {
+      if (S.cur) cache.put('v:' + THREAD_ID, { lastKey: S.cur.key, lastPage: S.cur.page, totalPages: S.totalPages });
+    }, 800);
+  }
+
   function showItem(item) {
     S.cur = item;
+    rememberView();
     if (ui.viewer.hidden && S.view === 'viewer') applyView();
     else renderStage();
   }
@@ -1729,31 +1866,73 @@ a.xtg-name:hover{text-decoration:underline}
   // ---------------------------------------------------------------------------
   // Loading the whole thread
   // ---------------------------------------------------------------------------
+  // Page sources, in this order of preference:
+  //   - the page being read: parsed from the live document (no request, always fresh)
+  //   - other pages: from the cache when younger than PAGE_TTL
+  //   - the last page: always fetched, since new posts land there
   async function loadThread() {
     S.started = true;
+    const gen = S.gen;
     S.totalPages = getTotalPages(document);
     setThreadStarter(detectThreadStarter(document), true);
     const cur = currentPage();
+    S.startPage = cur;
     const pageUrl = makePageUrl();
+
+    const rec = await cache.get('v:' + THREAD_ID);
+    if (gen !== S.gen) return;
+    S.resumeKey = !S.noCache && rec && rec.lastPage === cur && Date.now() - rec.at < PAGE_TTL ? rec.lastKey : null;
+    cache.put('v:' + THREAD_ID, Object.assign({}, rec, { totalPages: S.totalPages })); // marks the thread as recently used
+    cache.prune();
     scheduleStatus();
-    // the open page first (no request needed), then the others in order
+
     const pages = [cur, ...Array.from({ length: S.totalPages }, (_, i) => i + 1).filter((p) => p !== cur)];
     const pageQueue = makeQueue(PAGE_CONCURRENCY);
     await Promise.all(pages.map((p) => pageQueue(async () => {
-      if (S.stopped) return;
+      if (S.stopped || gen !== S.gen) return;
       const url = pageUrl(p);
+      const key = `p:${THREAD_ID}:${p}`;
+      let fetched = false;
       try {
-        const doc = p === cur ? document : await fetchDoc(url);
-        if (!S.stopped) processDoc(doc, p, url);
+        let posts = null;
+        if (p === cur) {
+          posts = parsePage(document, url);
+        } else if (p !== S.totalPages && !S.noCache) {
+          const hit = await cache.get(key, PAGE_TTL);
+          if (hit) { posts = hit.posts; S.pagesCached++; }
+        }
+        if (!posts) {
+          posts = parsePage(await fetchDoc(url), url);
+          fetched = true;
+        }
+        if (p === cur || fetched) cache.put(key, { posts });
+        if (!S.stopped && gen === S.gen) replayPage(posts, p, url);
       } catch (e) {
         S.pageErrors++;
         console.warn('[XenForo Thread Gallery] failed to load page', p, e);
       }
+      if (gen !== S.gen) return;
       S.pagesDone++;
       scheduleStatus();
-      if (p !== cur) await sleep(PAGE_DELAY_MS + Math.random() * PAGE_JITTER_MS); // be gentle with the forum
+      if (fetched) await sleep(PAGE_DELAY_MS + Math.random() * PAGE_JITTER_MS); // be gentle with the forum
     })));
     scheduleStatus();
+  }
+
+  // Start over without the cache (pages, links and thumbnails are fetched again and re-cached)
+  async function reloadThread() {
+    ui.menu.hidden = true;
+    S.gen++;
+    stopSlideshow();
+    await cache.dropPrefix(`p:${THREAD_ID}:`);
+    Object.assign(S, {
+      items: [], keys: new Set(), pending: 0, pagesDone: 0, pagesCached: 0, pageErrors: 0,
+      stopped: false, cur: null, userMoved: false, resumeKey: null, noCache: true,
+    });
+    ui.grid.innerHTML = '';
+    ui.strip.innerHTML = '';
+    renderStage();
+    loadThread();
   }
 
   // ---------------------------------------------------------------------------

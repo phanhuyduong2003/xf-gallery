@@ -16,6 +16,9 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
+- Bộ nhớ đệm trong trình duyệt (IndexedDB) cho các trang của chủ đề (12 giờ), kết quả lấy file từ link dịch vụ ảnh (7 ngày) và ảnh thu nhỏ video (7 ngày). Chuyển trang trong chủ đề không còn tải lại cả chủ đề: trang đang đọc lấy từ trang web, các trang khác từ bộ nhớ đệm, chỉ trang cuối được tải lại.
+- Album mở ở ảnh/video đầu tiên của trang đang đọc, hoặc ở mục đang xem dở trên trang đó.
+- **Tuỳ chọn → Tải lại chủ đề này (bỏ qua bộ nhớ đệm)**.
 - Nút chuyển ảnh/video trước / sau trên điện thoại. Trên mọi màn hình, nút tự mờ khi đang ở mục đầu hoặc cuối.
 
 ### Thay đổi

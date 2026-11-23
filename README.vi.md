@@ -91,7 +91,29 @@ Kiểu xem được ghi nhớ cho lần sau. Các nút khác:
   - *Hiện nhãn người đăng trên video* / *cả trên ảnh*: mặc định chỉ hiện trên video và video nhúng.
   - *Hiện mục hỏng*: mặc định ảnh/video đã bị xoá được ẩn đi; bật để thấy chúng trong chế độ Lưới / Cuộn và mở link nguồn.
   - *Sửa danh sách dịch vụ ảnh*: tên miền mà link trỏ tới *trang xem ảnh* (chứ không phải file ảnh). Script mở trang đó ngầm để lấy file thật. Mục không có dấu chấm (vd `zpic`) khớp mọi tên miền chứa chuỗi đó. Gặp dịch vụ mới thì thêm vào đây.
+  - *Tải lại chủ đề này (bỏ qua bộ nhớ đệm)*: tải lại mọi trang và mọi link, dùng khi bài ở các trang cũ đã bị sửa hoặc xoá.
 - Đóng modal: nút ✕, phím Esc, hoặc bấm ra vùng tối bên ngoài. Mở lại sẽ quay về đúng chỗ đang xem, không phải tải lại.
+
+### Bộ nhớ đệm và chuyển trang
+
+Chuyển từ trang 1 sang trang 2 của chủ đề là tải lại cả trang web, nên script khởi động lại từ đầu. Để không phải tải lại cả chủ đề mỗi lần như vậy, script lưu bộ nhớ đệm trong trình duyệt (IndexedDB, chỉ nằm trên máy bạn):
+
+| Dữ liệu | Giữ trong |
+|---|---|
+| Ảnh/video và thông tin người đăng của từng trang | 12 giờ |
+| Kết quả lấy file thật từ link dịch vụ ảnh | 7 ngày (link hỏng: 1 ngày) |
+| Ảnh thu nhỏ video do script tìm được | 7 ngày |
+| Mục bạn đang xem | 12 giờ |
+
+Khi mở album:
+
+- Trang đang đọc được đọc thẳng từ trang web: không tốn yêu cầu nào, luôn mới nhất.
+- Các trang khác lấy từ bộ nhớ đệm nếu còn mới; dòng trạng thái cho biết bao nhiêu trang ("3 trang từ bộ nhớ đệm").
+- Trang cuối luôn được tải lại vì bài mới nằm ở đó. Trang mới phát sinh cũng được tải.
+- Chỉ những link chưa có trong bộ nhớ đệm mới phải hỏi dịch vụ ảnh.
+- Album mở ở **ảnh/video đầu tiên của trang đang đọc**. Nếu trước đó bạn đang xem dở một mục thuộc trang này, album mở đúng mục đó.
+
+Bộ nhớ đệm giữ 30 chủ đề xem gần nhất và tự xoá mục hết hạn mỗi ngày một lần. Muốn làm mới toàn bộ, dùng *Tải lại chủ đề này* trong **Tuỳ chọn**.
 
 ## Những gì script nhận ra
 

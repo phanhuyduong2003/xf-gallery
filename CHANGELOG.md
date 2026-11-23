@@ -16,6 +16,9 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
+- Cache in the browser (IndexedDB) for thread pages (12 h), resolved image-host links (7 days) and video thumbnails (7 days). Moving between pages of a thread no longer re-downloads it: the page being read comes from the web page, other pages from the cache, and only the last page is fetched again.
+- The gallery opens on the first item of the page you are reading, or on the item you were viewing on that page.
+- **Options → Reload this thread (ignore cache)**.
 - Previous / next buttons on phones. On every screen they dim at the first and last item.
 
 ### Changed

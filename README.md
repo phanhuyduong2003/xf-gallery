@@ -91,9 +91,31 @@ The view is remembered. Other controls:
   - *Show poster info on videos* / *on images too*: by default labels appear on videos and embeds only.
   - *Show broken items*: deleted images/videos are hidden by default; turn this on to see them in Grid / Scroll and open their source links.
   - *Edit image host list*: domains whose links point to a *viewer page* rather than the file. The script opens that page in the background to find the real file. An entry without a dot (e.g. `zpic`) matches any domain containing that text. Add new hosts here when you come across them.
+  - *Reload this thread (ignore cache)*: fetch every page and link again, for when older posts were edited or removed.
 - Close the modal with the ✕ button, the Esc key, or by clicking the dark area outside it. Reopening returns to where you were without reloading.
 
 Settings (view, mute, label options, host list) are stored per forum.
+
+### Cache and moving between pages
+
+Moving from page 1 to page 2 of a thread reloads the whole web page, so the script starts again. To avoid re-downloading the thread every time, it keeps a cache in the browser (IndexedDB, on your computer only):
+
+| Data | Kept for |
+|---|---|
+| Media and poster info of each thread page | 12 hours |
+| What an image-host link resolved to | 7 days (broken links: 1 day) |
+| Video thumbnails found by the script | 7 days |
+| The item you were viewing | 12 hours |
+
+When you open the gallery:
+
+- The page you are reading is read straight from the web page: no request, always up to date.
+- Other pages come from the cache when it is recent enough; the status shows how many ("3 pages from cache").
+- The last page is always fetched again, because new posts land there. New pages are fetched too.
+- Only links that are not in the cache are looked up on image hosts.
+- The gallery opens on the **first item of the page you are reading**. If you were viewing an item on that page earlier, it opens on that item instead.
+
+The cache keeps the 30 most recently viewed threads and clears expired entries once a day. Use *Reload this thread* in **Options** to refresh everything.
 
 ## What the script recognises
 
