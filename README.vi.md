@@ -126,12 +126,25 @@ Mỗi trang script tải là một yêu cầu gửi tới diễn đàn. Tải li
 
 - Mỗi diễn đàn chỉ một yêu cầu trang tại một thời điểm, **cách nhau khoảng 5 giây** (± 1 giây ngẫu nhiên), dùng chung cho mọi tab đang mở diễn đàn đó. Khoảng cách tự gấp đôi (tối đa 60 giây) khi diễn đàn chậm hoặc lỗi, rồi giảm dần lại.
 - Tối đa **40 trang trong 10 phút**; sau đó tạm dừng cho tới khi bạn bấm **Tiếp tục**.
-- Nếu diễn đàn hiện **captcha / kiểm tra bảo mật** (hoặc trả lỗi 403 / 503), việc tải dừng ở mọi tab và không tự thử lại. Mở chủ đề trong tab thường, xác minh xong rồi bấm **Tiếp tục**. Nếu không, việc tải dừng 15 phút.
+- Nếu diễn đàn đáp yêu cầu tải ngầm bằng **captcha / kiểm tra bảo mật** (hoặc lỗi 403 / 503), script không bao giờ thử lại: diễn đàn đó chuyển sang **chế độ duyệt** (bên dưới), ở mọi tab, trong một ngày.
 - Nếu diễn đàn trả **429 Too Many Requests**, script đợi đúng thời gian diễn đàn yêu cầu, lần sau đợi gấp đôi, và dừng hẳn ở lần thứ ba liên tiếp.
 - Không tải gì khi tab đang ở chế độ nền hoặc album đang đóng.
 - Trang đã có thì không bao giờ tải lại (xem bộ nhớ đệm bên dưới), và trang đang đọc không tốn yêu cầu nào.
 
-Dòng trạng thái dưới bộ đếm cho biết script đang làm gì: số trang đã tải ("12/500 trang"), "đang chờ (giãn cách yêu cầu)", "đang tải trang 9", "đã dừng".
+Dòng trạng thái dưới bộ đếm cho biết script đang làm gì: số trang đã tải ("12/500 trang"), "đang chờ (giãn cách yêu cầu)", "đang tải trang 9", "đã dừng", "chế độ duyệt".
+
+**Chế độ duyệt** (diễn đàn không cho tải trang ngầm, như voz.vn sau Cloudflare):
+
+- Album gom ảnh từ các trang bạn tự mở; mỗi trang được lưu một tuần, nên chủ đề bạn theo dõi sẽ đầy dần khi đọc.
+- Đi tới trang chưa tải (bấm tiếp ở cuối trang, bấm lùi ở đầu trang, đầu / cuối, bấm ô "chưa tải", tự động phát hết trang) sẽ **mở trang đó như bình thường**, giống bấm "Trang sau". Album tự mở lại ở đó, đúng mục đang hướng tới. Các lượt mở trang này được giãn và tính như yêu cầu tải ngầm (cách nhau 5 giây, tối đa 40 lượt mỗi 10 phút).
+- Nếu diễn đàn hiện captcha ở trang đó, bạn xác minh như bình thường; album vẫn tự mở lại nếu trang tải xong trong vòng 10 phút.
+- Thông báo giải thích hiện một lần cho mỗi diễn đàn. **Thử tải ngầm lại** để thoát chế độ duyệt.
+
+**Album mở ở đâu:**
+
+- Ở trang đang đọc, tại mục đầu tiên, hoặc tại mục bạn đang xem dở trên trang đó.
+- Từ link tới một bài (`#post-123`, cũng là chỗ link **chưa đọc** của XenForo đưa tới): tại mục đầu tiên từ bài đó trở đi.
+- Nếu lần trước bạn đã xem xa hơn trong chủ đề (trong vòng một tuần), thanh thông báo hỏi **"Lần trước bạn xem tới trang 812. Xem tiếp từ đó"**: bấm một lần là mở trang đó (hoặc nhảy tới nếu đã có trong bộ nhớ đệm), đúng mục đang xem dở.
 
 ### Tải video
 
@@ -156,7 +169,7 @@ Chuyển từ trang 1 sang trang 2 của chủ đề là tải lại cả trang 
 | Ảnh/video và thông tin người đăng của từng trang | 7 ngày (3 trang cuối của chủ đề: 1 giờ, vì bài mới nằm ở đó) |
 | Kết quả lấy file thật từ link dịch vụ ảnh | 7 ngày (link hỏng: 1 ngày) |
 | Ảnh thu nhỏ video do script tìm được | 7 ngày |
-| Mục bạn đang xem | 12 giờ |
+| Mục bạn đang xem | 7 ngày |
 
 Khi mở album:
 
@@ -164,7 +177,7 @@ Khi mở album:
 - Các trang khác lấy từ bộ nhớ đệm nếu còn mới; dòng trạng thái cho biết bao nhiêu trang ("3 trang từ bộ nhớ đệm").
 - Các trang cuối được tải lại sau một giờ, vì bài mới nằm ở đó.
 - Chỉ những link chưa có trong bộ nhớ đệm mới phải hỏi dịch vụ ảnh.
-- Album mở ở **ảnh/video đầu tiên của trang đang đọc**. Nếu trước đó bạn đang xem dở một mục thuộc trang này, album mở đúng mục đó.
+- Album mở ở **ảnh/video đầu tiên của trang đang đọc** (hoặc của bài được link tới). Nếu trước đó bạn đang xem dở một mục thuộc trang này, album mở đúng mục đó. Mục đang xem được nhớ trong một tuần.
 
 Bộ nhớ đệm giữ 30 chủ đề xem gần nhất và tự xoá mục hết hạn mỗi ngày một lần. Muốn làm mới toàn bộ, dùng *Tải lại chủ đề này* trong **Tuỳ chọn**.
 

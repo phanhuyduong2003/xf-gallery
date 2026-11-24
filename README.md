@@ -128,12 +128,25 @@ Every page the script loads is a request to the forum. Loading hundreds of pages
 
 - One page request at a time per forum, **about 5 seconds apart** (± 1 s at random), shared by every tab open on that forum. The gap doubles (up to 60 s) when the forum is slow or failing, and shrinks back slowly.
 - At most **40 pages in 10 minutes**; then loading pauses until you press **Continue**.
-- If the forum shows a **captcha / security check** (or answers 403 / 503), loading stops in every tab, with no retry. Open the thread in a normal tab, complete the check, then press **Continue**. Otherwise loading stays stopped for 15 minutes.
+- If the forum answers a background request with a **captcha / security check** (or 403 / 503), the script never retries it: it switches that forum to **browse mode** (below), in every tab, for a day.
 - If the forum answers **429 Too Many Requests**, the script waits as long as the forum asks, twice as long the next time, and stops completely on the third time in a row.
 - Nothing loads while the tab is in the background or the gallery is closed.
 - Pages you already have are never requested again (see the cache below), and the page you are reading costs no request at all.
 
-The status line below the counter says what is happening: pages loaded ("12/500 pages"), "waiting (spacing requests)", "loading page 9", "paused".
+The status line below the counter says what is happening: pages loaded ("12/500 pages"), "waiting (spacing requests)", "loading page 9", "paused", "browse mode".
+
+**Browse mode** (forums that do not allow loading pages in the background, such as voz.vn behind Cloudflare):
+
+- The gallery collects the pages you open yourself; each one is cached for a week, so a thread you follow fills up as you read it.
+- Going to a page that is not loaded (next at the end of a page, previous at the start, first / last, a click on a "not loaded" block, autoplay reaching the end of a page) **opens that page the normal way**, like clicking "Next page". The gallery reopens there by itself, on the item the move was heading to. These page views are spaced and counted like background requests (5 s apart, 40 per 10 minutes).
+- If the forum shows a captcha on that page, complete it as usual; the gallery still reopens if the page loads within 10 minutes.
+- A banner explains this once per forum. **Try background loading again** leaves browse mode.
+
+**Where the gallery opens:**
+
+- On the page you are reading, at its first item, or at the item you were viewing on that page earlier.
+- From a link to a post (`#post-123`, which is where XenForo's **unread** link lands): at the first item from that post on.
+- If you were further along in the thread last time (within a week), a banner offers **"Last time you were at page 812. Continue there"**: one click opens that page (or jumps there if it is cached) on the item you were viewing.
 
 ### Video loading
 
@@ -158,7 +171,7 @@ Moving from page 1 to page 2 of a thread reloads the whole web page, so the scri
 | Media and poster info of each thread page | 7 days (the last 3 pages of the thread: 1 hour, since new posts land there) |
 | What an image-host link resolved to | 7 days (broken links: 1 day) |
 | Video thumbnails found by the script | 7 days |
-| The item you were viewing | 12 hours |
+| The item you were viewing | 7 days |
 
 When you open the gallery:
 
@@ -166,7 +179,7 @@ When you open the gallery:
 - Other pages come from the cache when it is recent enough; the status shows how many ("3 pages from cache").
 - The last pages are fetched again after an hour, because new posts land there.
 - Only links that are not in the cache are looked up on image hosts.
-- The gallery opens on the **first item of the page you are reading**. If you were viewing an item on that page earlier, it opens on that item instead.
+- The gallery opens on the **first item of the page you are reading** (or of the linked post). If you were viewing an item on that page earlier, it opens on that item instead. The item you were viewing is remembered for a week.
 
 The cache keeps the 30 most recently viewed threads and clears expired entries once a day. Use *Reload this thread* in **Options** to refresh everything.
 

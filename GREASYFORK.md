@@ -6,7 +6,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
 
 ## Features
 
-- **Whole thread, every page, without getting you banned.** Click the **Album** button on any thread page. It starts with the page you are reading and loads the pages around it, then more as you browse; pages not loaded yet show as a block you can click. Requests are paced like a person browsing: one page about every 5 seconds, shared by all your tabs, at most 40 pages per 10 minutes, nothing while the tab is in the background. If the forum shows a captcha or asks to slow down, loading stops in every tab instead of retrying. Modes: **Saver**, **Balanced** (default), **Whole thread**.
+- **Whole thread, every page, without getting you banned.** Click the **Album** button on any thread page. It starts with the page you are reading and loads the pages around it, then more as you browse; pages not loaded yet show as a block you can click. Requests are paced like a person browsing: one page about every 5 seconds, shared by all your tabs, at most 40 pages per 10 minutes, nothing while the tab is in the background. If the forum shows a captcha or asks to slow down, loading stops in every tab instead of retrying. Forums that do not allow background loading (voz.vn) switch to **browse mode**: moving to another page opens it normally and the gallery reopens there. Opens at the unread post, and offers to continue where you left off. Modes: **Saver**, **Balanced** (default), **Whole thread**.
 - **Open in new tab:** a small ↗ icon after each thread title in thread lists.
 - **Filter** all / images / videos, page indicator and page dividers in the filmstrip, jump to first / last.
 - **Three views**

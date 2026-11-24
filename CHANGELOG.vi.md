@@ -18,7 +18,9 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ### Thêm
 - Chế độ tải trong *Tuỳ chọn → Tải trang*: **Tiết kiệm** (chỉ trang đang đọc, trang kế tiếp khi xem tới), **Cân bằng** (mặc định: 2 trang mỗi bên, đi theo khi bạn xem) và **Toàn bộ chủ đề** (hỏi trước nếu trên 50 trang).
 - Trang chưa tải hiện thành ô "Tr. 4–8 · chưa tải" trong dải ảnh và trong lưới; bấm vào để tải trang gần nhất và nhảy tới đó. Tiếp / trước, đầu / cuối và tự động phát tự tải trang cần thiết rồi mới chuyển. Lưới và Cuộn tải trang tiếp khi cuộn tới cuối.
-- Thanh thông báo cho biết vì sao việc tải tạm dừng (captcha, "giảm tốc", giới hạn 40 trang) kèm nút **Tiếp tục** / **Mở chủ đề**.
+- Thanh thông báo cho biết vì sao việc tải tạm dừng ("giảm tốc", giới hạn 40 trang) kèm nút **Tiếp tục**.
+- **Chế độ duyệt** cho diễn đàn đáp yêu cầu tải ngầm bằng kiểm tra bảo mật (voz.vn): không thử lại; đi tới trang chưa tải sẽ mở trang đó như bình thường và album tự mở lại ở đó, đúng mục đang hướng tới (kể cả khi tự động phát). Được giãn và tính như yêu cầu tải ngầm.
+- Album mở ở bài được link tới (`#post-123`, chỗ link chưa đọc của XenForo đưa tới), và hỏi "Lần trước bạn xem tới trang 812. Xem tiếp từ đó".
 - Video nhanh hơn: video kế tiếp được chuẩn bị ngầm và phát ngay khi bạn tới; tốc độ từng host được ghi nhớ, host chậm bắt đầu bằng bản nhẹ; nếu bản chất lượng đầy đủ sau 1,5 giây chưa có hình thì bản nhẹ được cho đua; clip ngắn (tới 30 MB) ở host chậm tải thành 3 phần song song; kết nối tới host của mục kế tiếp được mở sớm. Host trả lỗi 403 / 429 / 503 không được áp dụng những điều này trong 30 phút, tệp của chính diễn đàn thì không bao giờ.
 - Nút **Auto / HD / SD** trên thanh điều khiển video (được ghi nhớ, giữ nguyên vị trí đang phát).
 

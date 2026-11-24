@@ -6,7 +6,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 
 ## Tính năng
 
-- **Cả chủ đề, mọi trang, không lo bị khoá tài khoản.** Bấm nút **Album** trên trang chủ đề bất kỳ. Album bắt đầu từ trang đang đọc, tải các trang xung quanh rồi tải thêm khi bạn xem tới; trang chưa tải hiện thành ô có thể bấm. Yêu cầu được giãn như người thật đang đọc: khoảng 5 giây một trang, dùng chung cho mọi tab, tối đa 40 trang mỗi 10 phút, không tải khi tab ở chế độ nền. Nếu diễn đàn hiện captcha hoặc yêu cầu giảm tốc, việc tải dừng ở mọi tab thay vì cố thử lại. Chế độ: **Tiết kiệm**, **Cân bằng** (mặc định), **Toàn bộ chủ đề**.
+- **Cả chủ đề, mọi trang, không lo bị khoá tài khoản.** Bấm nút **Album** trên trang chủ đề bất kỳ. Album bắt đầu từ trang đang đọc, tải các trang xung quanh rồi tải thêm khi bạn xem tới; trang chưa tải hiện thành ô có thể bấm. Yêu cầu được giãn như người thật đang đọc: khoảng 5 giây một trang, dùng chung cho mọi tab, tối đa 40 trang mỗi 10 phút, không tải khi tab ở chế độ nền. Nếu diễn đàn hiện captcha hoặc yêu cầu giảm tốc, việc tải dừng ở mọi tab thay vì cố thử lại. Diễn đàn không cho tải ngầm (voz.vn) chuyển sang **chế độ duyệt**: sang trang khác là mở trang đó như bình thường và album tự mở lại ở đó. Album mở ở bài chưa đọc, và hỏi xem tiếp chỗ đang dở. Chế độ: **Tiết kiệm**, **Cân bằng** (mặc định), **Toàn bộ chủ đề**.
 - **Mở tab mới:** icon ↗ nhỏ sau tiêu đề mỗi chủ đề trong danh sách chủ đề.
 - **Bộ lọc** tất cả / ảnh / video, cho biết ảnh thuộc trang nào, vạch chia trang trong dải ảnh, về mục đầu / cuối.
 - **3 kiểu xem**
