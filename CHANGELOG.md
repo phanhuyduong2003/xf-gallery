@@ -19,6 +19,14 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 -
 
 ### Changed
+-
+
+### Fixed
+-
+
+## [3.2.1] - 2026-11-25
+
+### Changed
 - Media seen inside a quote before the post it quotes is credited to the quoted member ("alice · quoted by bob", with the quoted text), and **Post** opens the quoted post. When the quoted post loads, the item moves there with its author, text and link, still shown once.
 
 ### Fixed

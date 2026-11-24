@@ -19,6 +19,14 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 -
 
 ### Thay đổi
+-
+
+### Sửa lỗi
+-
+
+## [3.2.1] - 2026-11-25
+
+### Thay đổi
 - Ảnh/video nằm trong trích dẫn mà bài gốc chưa được tải sẽ ghi đúng người đăng gốc ("alice · trích dẫn bởi bob", kèm chữ trong trích dẫn), và nút **Bài gốc** mở đúng bài được trích. Khi bài gốc tải xong, item chuyển về đúng chỗ của bài gốc với người đăng, chữ và link của bài đó, vẫn chỉ hiện một lần.
 
 ### Sửa lỗi
