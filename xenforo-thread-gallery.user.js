@@ -3,7 +3,7 @@
 // @name:vi          XenForo Thread Gallery – Album ảnh/video cho chủ đề
 // @namespace        xenforo-thread-gallery
 // @author           Dylan Phan
-// @version          3.0.0
+// @version          3.1.0
 // @description      Collects every image and video across all pages of a XenForo thread into one seamless gallery: viewer, grid and scroll modes, autoplay, Reels-style video player, poster labels, resolves image-host links (Chevereto, Imgur, Streamable…) and skips dead media.
 // @description:vi   Gom toàn bộ ảnh và video qua mọi trang của một chủ đề XenForo thành một album xem liền mạch: xem từng ảnh, lưới, cuộn dọc, trình phát video kiểu Reels, nhãn người đăng, tự lấy file thật từ link dịch vụ ảnh (Chevereto, Imgur, Streamable…) và bỏ qua ảnh/video đã chết.
 // @license          MIT

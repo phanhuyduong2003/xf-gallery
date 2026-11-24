@@ -16,6 +16,17 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
+-
+
+### Thay đổi
+-
+
+### Sửa lỗi
+-
+
+## [3.1.0] - 2026-11-25
+
+### Thêm
 - Trên màn hình nhỏ hoặc khi bật tiết kiệm dữ liệu, ảnh Imgur mở ở cỡ 1024 px thay vì ảnh gốc; phóng to thì tải ảnh gốc.
 
 ### Thay đổi

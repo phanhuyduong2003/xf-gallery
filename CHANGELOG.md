@@ -16,6 +16,17 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+## [3.1.0] - 2026-11-25
+
+### Added
 - On a small screen or with data saver on, Imgur photos open at 1024 px instead of the original; zooming in loads the original.
 
 ### Changed
