@@ -138,7 +138,10 @@
   const SESSION_WINDOW_MS = 10 * 60e3;
   const TRIP_MS = 15 * 60e3;            // after a captcha / block page: no page requests for this long (or until "Continue")
   const RATE_STRIKES = 3;               // the third "429 Too Many Requests" in a row is treated like a block page
-  const PAGE_ATTEMPTS = 4;              // one try plus three retries for timeouts / server errors
+  const PAGE_ATTEMPTS = 4;
+  const WINDOW_PAGES = 2;               // Balanced mode: pages loaded on each side of the page being viewed
+  const BIG_THREAD_PAGES = 50;          // Whole-thread mode asks first above this many pages
+  const SETTLE_MS = 1500;               // a page's media is considered complete after this long (links resolve late)              // one try plus three retries for timeouts / server errors
   const RESOLVE_CONCURRENCY = 2;   // external links resolved at once
   const THUMB_CONCURRENCY = 2;     // video thumbnails looked up at once
   const SLIDE_MS = 3500;           // slideshow delay for images
@@ -193,6 +196,12 @@
       netPaused: ' · paused',
       bannerTrip: 'The forum is asking for verification (captcha / security check). Open the thread in a normal tab, complete it, then press Continue.',
       bannerRate: (sec) => `The forum asked to slow down. Resuming in about ${sec} s.`,
+      bannerAll: (n, min) => `This thread has ${n} pages. Loading all of them takes about ${min} min and pauses every ${SESSION_CAP} pages.`,
+      btnLoadAll: 'Load all', btnLater: 'Later',
+      modeTitle: 'Loading pages', modeSaver: 'Saver: only when you get there', modeBalanced: 'Balanced: 2 pages around',
+      modeAll: 'Whole thread',
+      gapPages: (a, b) => (a === b ? `p. ${a}` : `p. ${a}–${b}`), gapUnloaded: 'not loaded', gapLoading: 'loading…',
+      gapFailed: 'failed, click to retry', gapTip: 'Click to load', waitPage: (p) => `Loading page ${p}…`,
       bannerRateStop: 'The forum keeps asking to slow down, so loading has stopped. Wait a few minutes, then press Continue.',
       bannerCap: (n) => `${n} pages loaded in the last 10 minutes. Paused so the forum is not overloaded.`,
       btnContinue: 'Continue', btnOpenPage: 'Open the thread',
@@ -248,6 +257,12 @@
       netPaused: ' · đã dừng',
       bannerTrip: 'Diễn đàn đang yêu cầu xác minh (captcha / kiểm tra bảo mật). Mở chủ đề trong tab thường để xác minh, rồi bấm Tiếp tục.',
       bannerRate: (sec) => `Diễn đàn yêu cầu giảm tốc. Tự tiếp tục sau khoảng ${sec} giây.`,
+      bannerAll: (n, min) => `Chủ đề có ${n} trang. Tải toàn bộ mất khoảng ${min} phút và tạm dừng sau mỗi ${SESSION_CAP} trang.`,
+      btnLoadAll: 'Tải toàn bộ', btnLater: 'Để sau',
+      modeTitle: 'Tải trang', modeSaver: 'Tiết kiệm: chỉ khi xem tới', modeBalanced: 'Cân bằng: 2 trang xung quanh',
+      modeAll: 'Toàn bộ chủ đề',
+      gapPages: (a, b) => (a === b ? `Tr. ${a}` : `Tr. ${a}–${b}`), gapUnloaded: 'chưa tải', gapLoading: 'đang tải…',
+      gapFailed: 'lỗi, bấm để thử lại', gapTip: 'Bấm để tải', waitPage: (p) => `Đang tải trang ${p}…`,
       bannerRateStop: 'Diễn đàn liên tục yêu cầu giảm tốc nên đã dừng tải. Đợi vài phút rồi bấm Tiếp tục.',
       bannerCap: (n) => `Đã tải ${n} trang trong 10 phút qua. Tạm dừng để không làm quá tải diễn đàn.`,
       btnContinue: 'Tiếp tục', btnOpenPage: 'Mở chủ đề',
@@ -816,7 +831,35 @@
 
   const pageKey = (p) => `p:${THREAD_ID}:${p}`;
 
-  // Queue a page; prio: smaller runs first. explicit: asked for by the user (kept even outside the window).
+  // Pages loaded without being asked for: Saver none, Balanced WINDOW_PAGES around the page being viewed,
+  // Whole thread every page (after a confirmation on big threads).
+  const loadsAll = () => S.loadMode === 'all' && (S.totalPages <= BIG_THREAD_PAGES || S.allConfirmed);
+  function inWindow(p) {
+    if (loadsAll()) return true;
+    return Math.abs(p - S.focusPage) <= (S.loadMode === 'saver' ? 0 : WINDOW_PAGES);
+  }
+  const wanted = (job) => job.explicit || inWindow(job.page);
+
+  function ensureWindow() {
+    if (!S.started || !S.pageUrl) return;
+    // queue everything first, then start, so the nearest page goes first
+    if (loadsAll()) for (let p = 1; p <= S.totalPages; p++) requestPage(p, { batch: true });
+    else if (S.loadMode !== 'saver') for (let d = 1; d <= WINDOW_PAGES; d++) {
+      requestPage(S.focusPage + d, { batch: true });
+      requestPage(S.focusPage - d, { batch: true });
+    }
+    pumpPages();
+  }
+
+  function setFocus(p) {
+    if (p === S.focusPage) return;
+    S.focusPage = p;
+    ensureWindow();
+    pumpPages(); // drops queued pages that left the window
+  }
+
+  // Queue a page (nearest to the page being viewed runs first). explicit: asked for by the user, kept even outside
+  // the window. batch: queue only, the caller starts the queue.
   function requestPage(p, opts = {}) {
     if (p < 1 || p > S.totalPages) return;
     const st = S.pageState.get(p);
@@ -826,7 +869,8 @@
     if (job) job.explicit = job.explicit || !!opts.explicit;
     else pageQ.queue.push({ page: p, attempts: 0, explicit: !!opts.explicit });
     S.pageState.set(p, 'queued');
-    pumpPages();
+    scheduleDividers();
+    if (!opts.batch) pumpPages();
   }
 
   async function pumpPages() {
@@ -834,11 +878,15 @@
     pageQ.running = true;
     try {
       while (pageQ.queue.length) {
+        // pages queued for a window the user has since left are forgotten (asked-for pages are kept)
+        pageQ.queue = pageQ.queue.filter((j) => wanted(j) || (S.pageState.set(j.page, 'unloaded'), false));
+        scheduleDividers();
+        if (!pageQ.queue.length) break;
         const why = blockReason();
         S.netState = why;
         if (why) break; // resumed by: tab visible again, gallery opened, "Continue", or the rate-limit timer
-        // nearest to the page being viewed first
-        pageQ.queue.sort((a, b) => Math.abs(a.page - S.focusPage) - Math.abs(b.page - S.focusPage));
+        // pages the user is waiting for first, then the nearest to the page being viewed
+        pageQ.queue.sort((a, b) => (b.explicit - a.explicit) || Math.abs(a.page - S.focusPage) - Math.abs(b.page - S.focusPage));
         const job = pageQ.queue.shift();
         await runPageJob(job);
       }
@@ -864,7 +912,8 @@
         scheduleStatus();
         await sleep(wait);
       }
-      if (blockReason() || gen !== S.gen) return { deferred: true }; // conditions changed while waiting
+      // conditions changed while waiting, or the user now waits for another page
+      if (blockReason() || gen !== S.gen || !wanted(job) || (!job.explicit && pageQ.queue.some((j) => j.explicit))) return { deferred: true };
       const now = Date.now();
       net.write({ last: now, log: (net.read().log || []).filter((t) => t > now - SESSION_WINDOW_MS).concat(now) });
       S.netState = 'fetching';
@@ -899,6 +948,8 @@
       S.pageErrors++;
       console.warn('[XenForo Thread Gallery] failed to load page', p, out.error);
       scheduleStatus();
+      scheduleDividers();
+      pageSettled(p);
       return;
     }
     const posts = out.posts || parsePage(out.doc, url);
@@ -916,13 +967,51 @@
     S.pageState.set(p, 'loaded');
     replayPage(posts, p, url);
     scheduleStatus();
+    scheduleDividers();
+    // a move waiting for this page runs once its links have resolved (or after SETTLE_MS)
+    if (!S.pageLinks.get(p)) pageSettled(p);
+    else setTimeout(() => pageSettled(p), SETTLE_MS);
+  }
+
+  function pageSettled(p) {
+    const nav = S.pendingNav;
+    if (!nav || nav.page !== p || !ui) return;
+    S.pendingNav = null;
+    nav.run();
+  }
+
+  // Ask for page p because the user is moving there; run() once it has loaded
+  function waitForPage(p, run) {
+    S.pendingNav = { page: p, run };
+    requestPage(p, { explicit: true, batch: true });
+    setFocus(p);
+    pumpPages();
+    if (S.view === 'viewer' && ui && S.pageState.get(p) !== 'loaded') {
+      ui.stage.querySelectorAll('.xtg-wait').forEach((x) => x.remove());
+      ui.stage.appendChild(el('div', { className: 'xtg-slow xtg-wait', textContent: tr('waitPage', p) }));
+    }
   }
 
   function stopPages() {
     pageQ.queue.forEach((j) => S.pageState.set(j.page, 'unloaded'));
     pageQ.queue = [];
+    S.pendingNav = null;
+    if (ui) ui.stage.querySelectorAll('.xtg-wait').forEach((x) => x.remove());
     scheduleStatus();
+    scheduleDividers();
   }
+
+  // First page after `from` (exclusive) in direction d, before `to` (exclusive), that is not loaded yet.
+  // Failed pages are skipped: they do not block navigation.
+  function firstGap(from, to, d) {
+    for (let p = from + d; (to - p) * d > 0 && p >= 1 && p <= S.totalPages; p += d) {
+      const st = S.pageState.get(p);
+      if (st !== 'loaded' && st !== 'failed') return p;
+    }
+    return 0;
+  }
+  const curPage = () => (S.cur ? S.cur.page : S.focusPage);
+  const moreIn = (d) => S.totalPages > 1 && !!firstGap(curPage(), d > 0 ? S.totalPages + 1 : 0, d);
 
   function netContinue() {
     const n = net.read();
@@ -1127,8 +1216,13 @@
     renderId: 0,             // bumped on every render of the viewer
     curReady: false,         // the current item has loaded
     slowTimer: null,
-    stripTouched: 0,
-    filter: store.get('filter', 'all'), // all | image | video (video includes embedded players)         // last time the user scrolled the filmstrip by hand
+    stripTouched: 0,         // last time the user scrolled the filmstrip by hand
+    filter: store.get('filter', 'all'), // all | image | video (video includes embedded players)
+    loadMode: store.get('loadMode', 'balanced'), // saver | balanced | all
+    allConfirmed: false,     // Whole thread on a big thread: the user said "Load all"
+    allDismissed: false,     // ... or "Later"
+    pendingNav: null,        // { page, run }: a move waiting for that page to load (next at the edge, first / last, gap click)
+    pageLinks: new Map(),    // page -> links still resolving
     gen: 0,                  // bumped by "Reload" so late results of the previous load are ignored
     noCache: false,          // set by "Reload": ignore cached data for this load
     pagesCached: 0,
@@ -1194,6 +1288,14 @@
 .xtg-f-image [data-kind="video"],.xtg-f-video [data-kind="image"]{display:none}
 .xtg-pdiv{flex:0 0 auto;align-self:center;padding:2px 6px 2px 8px;margin-left:2px;border-left:1px solid #33363d;
   font-size:11px;color:#9aa0a8;white-space:nowrap}
+.xtg-gap{flex:0 0 auto;align-self:stretch;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;
+  padding:0 10px;margin:0 2px;border:1px dashed #3a3e47;border-radius:8px;background:none;color:#9aa0a8;font:inherit;font-size:11px;
+  line-height:1.25;white-space:nowrap;cursor:pointer}
+.xtg-gap:hover{border-color:#5b8cff;color:#e6e8eb}
+.xtg-gap[data-kind="failed"]{border-color:#7a5230;color:#f0b37e}
+.xtg-gap[data-kind="loading"]{cursor:default;opacity:.75}
+.xtg-grid .xtg-gap{grid-column:1/-1;flex-direction:row;gap:8px;padding:14px;margin:4px 0;font-size:13px;width:100%;max-width:960px}
+.xtg-mtitle{padding:8px 10px 2px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#8b9099;border-top:1px solid #2c2f36;margin-top:4px}
 .xtg-pdiv:first-child{border-left:0;margin-left:0;padding-left:2px}
 .xtg-status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .xtg-grow{flex:1}
@@ -1446,6 +1548,10 @@ a.xtg-name:hover{text-decoration:underline}
             <label><input type="checkbox" data-opt="infoVideos"> ${esc(tr('optInfoVideos'))}</label>
             <label><input type="checkbox" data-opt="infoImages"> ${esc(tr('optInfoImages'))}</label>
             <label><input type="checkbox" data-opt="dead"> ${esc(tr('optDead'))}</label>
+            <div class="xtg-mtitle">${esc(tr('modeTitle'))}</div>
+            <label><input type="radio" name="xtg-mode" value="saver"> ${esc(tr('modeSaver'))}</label>
+            <label><input type="radio" name="xtg-mode" value="balanced"> ${esc(tr('modeBalanced'))}</label>
+            <label><input type="radio" name="xtg-mode" value="all"> ${esc(tr('modeAll'))}</label>
             <button data-act="reload">${esc(tr('optReload'))}</button>
             <button data-act="hosts">${esc(tr('optHosts'))}</button>
           </div>
@@ -1513,6 +1619,8 @@ a.xtg-name:hover{text-decoration:underline}
         case 'reload': reloadThread(); break;
         case 'retry': renderStage(); break;
         case 'netcontinue': netContinue(); break;
+        case 'loadall': S.allConfirmed = true; ensureWindow(); scheduleStatus(); break;
+        case 'later': S.allDismissed = true; scheduleStatus(); break;
         default: break;
       }
     });
@@ -1521,6 +1629,10 @@ a.xtg-name:hover{text-decoration:underline}
     ['infoVideos', 'infoImages'].forEach((kind) => {
       opt(kind).checked = S[kind];
       opt(kind).addEventListener('change', (e) => setInfo(kind, e.target.checked));
+    });
+    root.querySelectorAll('[name="xtg-mode"]').forEach((r) => {
+      r.checked = r.value === S.loadMode;
+      r.addEventListener('change', () => setLoadMode(r.value));
     });
     opt('dead').addEventListener('change', (e) => {
       S.showDead = e.target.checked;
@@ -1537,6 +1649,16 @@ a.xtg-name:hover{text-decoration:underline}
     setFilter(S.filter);
     document.addEventListener('keydown', onKey, true);
     applyView();
+  }
+
+  function setLoadMode(mode) {
+    S.loadMode = mode;
+    store.set('loadMode', mode);
+    S.allConfirmed = false;
+    S.allDismissed = false;
+    ensureWindow();
+    pumpPages();
+    scheduleStatus();
   }
 
   // Drag the filmstrip sideways with the mouse; a click without dragging still opens the thumbnail.
@@ -1653,6 +1775,11 @@ a.xtg-name:hover{text-decoration:underline}
       html = `<span>${esc(tr('bannerRate', left))}</span>`;
     } else if (st === 'cap') {
       html = `<span>${esc(tr('bannerCap', SESSION_CAP))}</span><button data-act="netcontinue">${esc(tr('btnContinue'))}</button>`;
+    } else if (S.started && S.loadMode === 'all' && !loadsAll() && !S.allDismissed) {
+      const left = S.totalPages - loadedPages();
+      const min = Math.max(1, Math.ceil(left * PAGE_INTERVAL_MS / 60e3), Math.floor((left - 1) / SESSION_CAP) * 10);
+      html = `<span>${esc(tr('bannerAll', S.totalPages, min))}</span><button data-act="loadall">${esc(tr('btnLoadAll'))}</button>` +
+        `<button data-act="later">${esc(tr('btnLater'))}</button>`;
     }
     if (ui.banner.dataset.html !== html) {
       ui.banner.dataset.html = html;
@@ -1693,10 +1820,11 @@ a.xtg-name:hover{text-decoration:underline}
     const pos = S.cur && !S.cur.dead ? live.indexOf(S.cur) : -1;
     ui.counter.textContent = `${pos + 1} / ${live.length}`;
     ui.pageInfo.textContent = pos >= 0 && S.totalPages > 1 ? tr('pageOf', S.cur.page, S.totalPages) : '';
-    ui.prevBtns.forEach((b) => { b.disabled = pos <= 0; });
-    ui.nextBtns.forEach((b) => { b.disabled = pos < 0 || pos >= live.length - 1; });
-    ui.firstBtn.disabled = pos <= 0;
-    ui.lastBtn.disabled = pos < 0 || pos >= live.length - 1;
+    const atStart = pos <= 0 && !moreIn(-1), atEnd = (pos < 0 || pos >= live.length - 1) && !moreIn(1);
+    ui.prevBtns.forEach((b) => { b.disabled = atStart; });
+    ui.nextBtns.forEach((b) => { b.disabled = atEnd; });
+    ui.firstBtn.disabled = atStart;
+    ui.lastBtn.disabled = atEnd;
     const msg = loading ? tr('searching') : tr('none');
     ui.empty.textContent = msg;
     ui.empty.style.display = live.length ? 'none' : '';
@@ -1790,6 +1918,7 @@ a.xtg-name:hover{text-decoration:underline}
     const forStart = !S.startLocked && ctx.page === S.startPage;
     if (forStart) S.startPending++;
     S.pending++;
+    S.pageLinks.set(ctx.page, (S.pageLinks.get(ctx.page) || 0) + 1);
     scheduleStatus();
     const done = (res) => {
       if (gen !== S.gen) return;
@@ -1800,6 +1929,9 @@ a.xtg-name:hover{text-decoration:underline}
       if (gen !== S.gen) return;
       S.pending--;
       if (forStart) { S.startPending--; maybeLockStart(); }
+      const left = S.pageLinks.get(ctx.page) - 1;
+      S.pageLinks.set(ctx.page, left);
+      if (!left) pageSettled(ctx.page);
       scheduleStatus();
     });
   }
@@ -1980,6 +2112,7 @@ a.xtg-name:hover{text-decoration:underline}
   function buildTile(item) {
     const t = el('div', { className: 'xtg-tile' });
     t.dataset.kind = kindOf(item);
+    t.dataset.page = item.page;
     const list = S.view === 'list';
     const cap = el('div', { className: 'xtg-cap' });
     cap.innerHTML = list
@@ -2048,7 +2181,10 @@ a.xtg-name:hover{text-decoration:underline}
     dividerTimer = setTimeout(updateDividers, 80);
   }
   function updateDividers() {
-    ui.strip.querySelectorAll('.xtg-pdiv').forEach((d) => d.remove());
+    if (!ui) return;
+    ui.strip.querySelectorAll('.xtg-pdiv, .xtg-gap').forEach((d) => d.remove());
+    ui.grid.querySelectorAll('.xtg-gap').forEach((d) => d.remove());
+    gapObserver.disconnect();
     if (S.totalPages > 1) {
       let last = null;
       for (const th of [...ui.strip.children]) {
@@ -2057,9 +2193,70 @@ a.xtg-name:hover{text-decoration:underline}
         last = th.dataset.page;
         th.before(el('div', { className: 'xtg-pdiv', textContent: tr('pageShort', last) }));
       }
+      const runs = gapRuns();
+      placeGaps(ui.strip, '.xtg-th', runs);
+      placeGaps(ui.grid, '.xtg-tile', runs).forEach((g) => gapObserver.observe(g));
     }
     centerStrip(false, false);
   }
+
+  // Runs of consecutive pages that are not loaded, by kind: 'unloaded' | 'loading' | 'failed'
+  function gapRuns() {
+    const runs = [];
+    let run = null;
+    for (let p = 1; p <= S.totalPages; p++) {
+      const st = S.pageState.get(p);
+      const kind = st === 'loaded' ? null : st === 'failed' ? 'failed' : st === 'queued' || st === 'loading' ? 'loading' : 'unloaded';
+      if (!kind) run = null;
+      else if (run && run.kind === kind) run.b = p;
+      else runs.push(run = { a: p, b: p, kind });
+    }
+    return runs;
+  }
+
+  // A "p. 4–8 · not loaded" box where those pages would be, among thumbnails / tiles (sorted by page)
+  function placeGaps(box, sel, runs) {
+    const items = [...box.querySelectorAll(':scope > ' + sel)];
+    const made = [];
+    let i = 0;
+    for (const run of runs) {
+      while (i < items.length && +items[i].dataset.page < run.a) i++;
+      const g = el('button', { className: 'xtg-gap', title: run.kind === 'loading' ? '' : tr('gapTip') });
+      Object.assign(g.dataset, { a: run.a, b: run.b, kind: run.kind });
+      const state = tr(run.kind === 'failed' ? 'gapFailed' : run.kind === 'loading' ? 'gapLoading' : 'gapUnloaded');
+      g.innerHTML = `<b>${esc(tr('gapPages', run.a, run.b))}</b><span>${esc(state)}</span>`;
+      g.onclick = (e) => { e.stopPropagation(); openGap(run); };
+      let at = items[i] || null;
+      if (at && at.previousElementSibling && at.previousElementSibling.classList.contains('xtg-pdiv')) at = at.previousElementSibling;
+      box.insertBefore(g, at && at.parentNode === box ? at : null);
+      made.push(g);
+    }
+    return made;
+  }
+
+  // Load the gap's page nearest to what is being viewed and, in the viewer, go to its first (or last) item
+  function openGap(run) {
+    if (run.kind === 'loading') return;
+    const back = run.b < curPage();
+    const p = back ? run.b : run.a;
+    if (run.kind === 'failed') S.pageState.set(p, 'unloaded');
+    waitForPage(p, () => {
+      const list = visibleItems().filter((i) => i.page === p);
+      const target = back ? list[list.length - 1] : list[0];
+      if (target && S.view === 'viewer') { S.userMoved = true; showItem(target); }
+      else if (target && target.el) target.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }
+
+  // Grid / Scroll: a not-loaded gap after the page being viewed that scrolls into view loads its next page,
+  // like an endless list (not in Saver mode, and never backwards, so opening the list does not walk to page 1)
+  const gapObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      const g = e.target;
+      if (!e.isIntersecting || S.loadMode === 'saver' || g.dataset.kind !== 'unloaded' || ui.scroll.hidden) continue;
+      if (+g.dataset.a > curPage()) requestPage(+g.dataset.a, { explicit: true });
+    }
+  }, { rootMargin: '400px' });
 
   // Keep the viewed item's thumbnail in the middle of the filmstrip. Items arriving later shift it, so this
   // also runs after insertions, unless the user scrolled the strip themselves in the last few seconds.
@@ -2586,6 +2783,8 @@ a.xtg-name:hover{text-decoration:underline}
 
   function showItem(item) {
     S.cur = item;
+    S.pendingNav = null;
+    if (item) setFocus(item.page);
     rememberView();
     if (ui.viewer.hidden && S.view === 'viewer') applyView();
     else renderStage();
@@ -2593,6 +2792,9 @@ a.xtg-name:hover{text-decoration:underline}
 
   // First (-1) or last (+1) item of the current filter. In Grid / Scroll views this scrolls the list.
   function jumpToEdge(dir) {
+    const edge = dir < 0 ? 1 : S.totalPages;
+    const st = S.pageState.get(edge);
+    if (st !== 'loaded' && st !== 'failed') { waitForPage(edge, () => jumpToEdge(dir)); return; }
     const list = visibleItems();
     const target = dir < 0 ? list[0] : list[list.length - 1];
     if (S.view !== 'viewer') {
@@ -2608,16 +2810,24 @@ a.xtg-name:hover{text-decoration:underline}
   }
 
   // Move to the next live item in direction d; returns false at either end
+  // Pages not loaded yet in between (or beyond the last loaded item) are loaded first, then the move happens;
+  // returns true in that case too, so autoplay waits instead of stopping.
   function step(d, byUser) {
     const from = S.cur ? S.items.indexOf(S.cur) : -1;
+    const here = curPage();
+    let target = null;
     for (let i = from + d; i >= 0 && i < S.items.length; i += d) {
       if (S.items[i].dead || !passesFilter(S.items[i])) continue;
-      if (byUser) S.userMoved = true;
-      S.lastDir = d;
-      showItem(S.items[i]);
-      return true;
+      target = S.items[i];
+      break;
     }
-    return false;
+    const gap = firstGap(here, target ? target.page : d > 0 ? S.totalPages + 1 : 0, d);
+    if (byUser) S.userMoved = true;
+    S.lastDir = d;
+    if (gap) { waitForPage(gap, () => step(d, false)); return true; }
+    if (!target) return false;
+    showItem(target);
+    return true;
   }
 
   // The current item has loaded: drop the spinner / slow notice, show the info, start the autoplay delay.
@@ -2775,7 +2985,7 @@ a.xtg-name:hover{text-decoration:underline}
   const stopSlideshow = () => setSlideshow(false, false);
 
   // ---------------------------------------------------------------------------
-  // Loading the whole thread
+  // Loading the thread
   // ---------------------------------------------------------------------------
   // Page sources, in this order of preference (none of the first two costs a request):
   //   1. the page being read: parsed from the live document;
@@ -2817,14 +3027,10 @@ a.xtg-name:hover{text-decoration:underline}
       }
     }
 
-    // 3. the rest, through the scheduler
-    queueNeededPages();
+    // 3. what the loading mode asks for, through the scheduler; the rest when the user gets there
+    ensureWindow();
     scheduleStatus();
-  }
-
-  // Step 1 keeps the previous behaviour (the whole thread); step 2 replaces this with the loading modes
-  function queueNeededPages() {
-    for (let p = 1; p <= S.totalPages; p++) requestPage(p);
+    scheduleDividers();
   }
 
   // Start over without the cache (pages, links and thumbnails are fetched again and re-cached)
@@ -2836,6 +3042,7 @@ a.xtg-name:hover{text-decoration:underline}
     pageQ.queue = [];
     Object.assign(S, {
       items: [], keys: new Set(), pending: 0, pagesCached: 0, pageErrors: 0, pageState: new Map(), netState: null,
+      pendingNav: null, pageLinks: new Map(),
       cur: null, userMoved: false, resumeKey: null, startLocked: false, startPending: 0, startReplayed: false, noCache: true,
     });
     ui.grid.innerHTML = '';
