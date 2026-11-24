@@ -182,6 +182,7 @@
 .xtg-compact .xtg-name{font-size:14px}
 .xtg-compact .xtg-text{margin-top:4px;font-size:13px;-webkit-line-clamp:1}
 .xtg-compact .xtg-btns,.xtg-compact .xtg-date,.xtg-compact .xtg-text.xtg-full-text{display:none}
+.xtg-compact .xtg-date.xtg-via{display:inline}
 .xtg-btns{display:flex;gap:14px;margin-top:2px}
 .xtg-text.xtg-full-text{display:none}
 .xtg-showfull .xtg-text.xtg-cap-text{display:none}

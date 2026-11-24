@@ -19,10 +19,10 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 -
 
 ### Thay đổi
--
+- Ảnh/video nằm trong trích dẫn mà bài gốc chưa được tải sẽ ghi đúng người đăng gốc ("alice · trích dẫn bởi bob", kèm chữ trong trích dẫn), và nút **Bài gốc** mở đúng bài được trích. Khi bài gốc tải xong, item chuyển về đúng chỗ của bài gốc với người đăng, chữ và link của bài đó, vẫn chỉ hiện một lần.
 
 ### Sửa lỗi
--
+- Ảnh/video được trích dẫn ở trang sau mà trang đó tải trước (khi mở album giữa chủ đề, hoặc ở chế độ Saver) bị gán cho người trích dẫn và nằm ở chỗ trích dẫn, kể cả sau khi bài gốc đã tải.
 
 ## [3.2.0] - 2026-11-25
 

@@ -60,7 +60,7 @@
     await cache.dropPrefix(`p:${THREAD_ID}:`);
     pageQ.queue = [];
     Object.assign(S, {
-      items: [], keys: new Set(), pending: 0, pagesCached: 0, pageErrors: 0, pageState: new Map(), netState: null,
+      items: [], keys: new Set(), byKey: new Map(), quotedLinks: new Set(), pending: 0, pagesCached: 0, pageErrors: 0, pageState: new Map(), netState: null,
       pendingNav: null, pageLinks: new Map(),
       cur: null, userMoved: false, resumeKey: null, startLocked: false, startPending: 0, startReplayed: false, noCache: true,
     });

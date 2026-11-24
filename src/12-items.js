@@ -40,6 +40,8 @@
     if (best) { S.autoPicked = best; showItem(best); }
   }
 
+  // Media found several times (quotes, thumbnails, proxies) is shown once. A copy inside a quote only stands in
+  // until the post it quotes turns up: the item then moves there and takes that post's author, text and link.
   function addItem(spec, pos, ctx) {
     let key;
     if (spec.type === 'dead') {
@@ -48,32 +50,28 @@
       S.keys.add(key);
     } else {
       key = keyOf(spec.type === 'embed' ? spec.url : spec.candidates[0]);
-      if (S.keys.has(key)) return;
-      S.keys.add(key);
-      (spec.candidates || []).slice(1).forEach((c) => S.keys.add(keyOf(c)));
+      const keys = [key, ...(spec.candidates || []).slice(1).map(keyOf)];
+      const seen = keys.find((k) => S.keys.has(k));
+      if (seen) {
+        const known = S.byKey.get(seen);
+        if (known && known.quote && !ctx.quote && S.items.includes(known)) moveToPost(known, pos, ctx);
+        return;
+      }
+      keys.forEach((k) => S.keys.add(k));
     }
     const item = Object.assign({ candidates: [] }, spec, {
       key, pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, caption: ctx.caption || null, dead: spec.type === 'dead',
+      quote: ctx.quote || null,
     });
+    if (!item.dead) [key, ...(spec.candidates || []).slice(1).map(keyOf)].forEach((k) => S.byKey.set(k, item));
     if (item.dead) item.type = 'image';
     // here rather than when reading the page, so pages already in the cache get the same order
     if (item.candidates.length) item.candidates = directFirst(item.candidates);
     if (item.thumb) item.thumb = directUrl(item.thumb);
     if (item.type === 'image' && !item.dead) Object.assign(item, imageSizes(item));
 
-    // binary insert to keep thread order (async results arrive out of order)
-    let lo = 0, hi = S.items.length;
-    while (lo < hi) { const mid = (lo + hi) >> 1; if (comparePos(S.items[mid].pos, pos) < 0) lo = mid + 1; else hi = mid; }
-    S.items.splice(lo, 0, item);
-    const after = S.items.slice(lo + 1);
-
-    item.el = buildTile(item);
-    const nextTile = after.find((i) => i.el);
-    ui.grid.insertBefore(item.el, nextTile ? nextTile.el : null);
+    placeItem(item);
     if (!item.dead) {
-      item.thumbEl = buildThumb(item);
-      const nextThumb = after.find((i) => i.thumbEl);
-      ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
       scheduleDividers();
       if (item.type !== 'image' && !item.thumb) ensureThumb(item);
       // a file found dead on a recent visit is shown as dead straight away, without asking its host again
@@ -89,11 +87,45 @@
     scheduleStatus();
   }
 
+  // Insert (or re-insert) an item at its place in thread order, with its tile and filmstrip thumbnail
+  function placeItem(item) {
+    let lo = 0, hi = S.items.length; // binary insert: async results arrive out of order
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (comparePos(S.items[mid].pos, item.pos) < 0) lo = mid + 1; else hi = mid; }
+    S.items.splice(lo, 0, item);
+    const after = S.items.slice(lo + 1);
+    const wasOn = !!(item.thumbEl && item.thumbEl.classList.contains('on'));
+    const fresh = buildTile(item);
+    if (item.el) item.el.remove();
+    item.el = fresh;
+    const nextTile = after.find((i) => i.el);
+    ui.grid.insertBefore(item.el, nextTile ? nextTile.el : null);
+    if (item.dead) return;
+    if (item.thumbEl) item.thumbEl.remove();
+    item.thumbEl = buildThumb(item);
+    item.thumbEl.classList.toggle('on', wasOn);
+    const nextThumb = after.find((i) => i.thumbEl);
+    ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
+  }
+
+  // The post that quoted this media turned up first; now the post it quotes has: move the item there
+  function moveToPost(item, pos, ctx) {
+    S.items.splice(S.items.indexOf(item), 1);
+    Object.assign(item, { pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, caption: ctx.caption || null, quote: null });
+    placeItem(item);
+    scheduleDividers();
+    if (S.cur === item) { setFocus(item.page); refreshLabels(); ui.postLink.href = postUrl(item); }
+    scheduleStatus();
+  }
+
   function handleUnit(unit, pos, ctx) {
     if (Array.isArray(unit)) { unit.forEach((spec, i) => addItem(spec, pos.concat(i), ctx)); return; }
     const linkKey = 'link:' + keyOf(unit.source);
-    if (S.keys.has(linkKey)) return; // same link already being resolved (usually a quote)
+    if (S.keys.has(linkKey)) { // same link seen before (usually a quote): resolve it again only for the post it quotes
+      if (ctx.quote || !S.quotedLinks.has(linkKey)) return;
+      S.quotedLinks.delete(linkKey); // (the lookup is cached, so this costs no request)
+    }
     S.keys.add(linkKey);
+    if (ctx.quote) S.quotedLinks.add(linkKey);
     const gen = S.gen;
     const forStart = !S.startLocked && ctx.page === S.startPage;
     if (forStart) S.startPending++;
@@ -120,12 +152,13 @@
   // { link } and resolved when the page is replayed (usually straight from the link cache).
   function parsePage(doc, pageUrl) {
     return getPosts(doc).map((post) => {
-      const { units, anchors } = extractPost(post, pageUrl);
+      const { units, anchors, quotes } = extractPost(post, pageUrl);
       return {
         postId: postIdOf(post),
         meta: postMeta(post, pageUrl),
         units: units.map((u) => (Array.isArray(u) ? u : { link: u.source })),
         captions: mediaCaptions(post, anchors),
+        quotes: quotes.some(Boolean) ? quotes : undefined, // optional: pages cached before this have none
       };
     });
   }
@@ -136,7 +169,7 @@
       const ctx = { page, postId: post.postId, pageUrl, meta: post.meta };
       post.units.forEach((unit, k) => {
         const u = unit.link ? resolveLink(unit.link, pageUrl) : unit;
-        if (u) handleUnit(u, [page, pi, k], Object.assign({}, ctx, { caption: (post.captions && post.captions[k]) || null }));
+        if (u) handleUnit(u, [page, pi, k], Object.assign({}, ctx, { caption: (post.captions && post.captions[k]) || null, quote: (post.quotes && post.quotes[k]) || null }));
       });
     });
   }
@@ -165,5 +198,6 @@
     scheduleStatus();
   }
 
-  const postUrl = (item) => item.pageUrl + (item.postId ? '#post-' + item.postId : '');
+  // quoted media whose original post is not loaded links to that post (XenForo's goto link), else to where it is
+  const postUrl = (item) => (item.quote && item.quote.url) || item.pageUrl + (item.postId ? '#post-' + item.postId : '');
 

@@ -183,6 +183,7 @@
       pinTip: 'Keep the info shown, outside the image (P)', unpinTip: 'Show the info only under the mouse (P)',
       fullPost: 'Whole post',
       inPost: (i, n) => `${i} of ${n} in this post`,
+      quotedBy: (n) => `quoted by ${n}`, quoted: 'quoted',
       optDead: 'Show broken items in grid / scroll',
       optHosts: 'Edit image host list…',
       optReload: 'Reload this thread (ignore cache)',
@@ -250,6 +251,7 @@
       pinTip: 'Ghim thông tin, đặt ra ngoài ảnh (phím P)', unpinTip: 'Chỉ hiện thông tin khi di chuột vào (phím P)',
       fullPost: 'Xem cả bài',
       inPost: (i, n) => `${i}/${n} trong bài`,
+      quotedBy: (n) => `trích dẫn bởi ${n}`, quoted: 'trích dẫn',
       optDead: 'Hiện mục hỏng ở chế độ lưới / cuộn',
       optHosts: 'Sửa danh sách dịch vụ ảnh…',
       optReload: 'Tải lại chủ đề này (bỏ qua bộ nhớ đệm)',
@@ -1165,16 +1167,39 @@
     tiktok: (k) => `https://www.tiktok.com/video/${k}`,
   };
 
+  // The innermost quote a media element sits in, as { author, postId, url, text } (any may be empty), or null.
+  // XF 2: blockquote.bbCodeBlock--quote[data-quote][data-source="post: 123"]; XF 1: .bbCodeQuote[data-author]
+  // with an .AttributionLink. Media quoted from an earlier post is credited to that post (see addItem).
+  const QUOTE_SEL = '.bbCodeBlock--quote, .bbCodeQuote';
+  function quoteOf(node, root, base) {
+    const q = node && node.closest(QUOTE_SEL);
+    if (!q || !root.contains(q)) return null;
+    const src = (q.getAttribute('data-source') || '').match(/post:\s*(\d+)/);
+    const jump = q.querySelector('.bbCodeBlock-sourceJump[href], .AttributionLink[href]');
+    const jumpUrl = jump && abs(jump.getAttribute('href'), base);
+    const jm = jumpUrl && jumpUrl.href.match(/(?:goto\/post\?id=|posts\/)(\d+)/);
+    const content = q.querySelector('.bbCodeBlock-expandContent, .bbCodeBlock-content, .quote');
+    return {
+      author: (q.getAttribute('data-quote') || q.getAttribute('data-author') || '').trim() || null,
+      postId: (src && src[1]) || (jm && jm[1]) || null,
+      url: jumpUrl ? jumpUrl.href : null,
+      text: content ? cleanText(content.cloneNode(true)).slice(0, 1000) : '',
+    };
+  }
+
   // Media of one post, in document order. Each unit is spec[] or a Promise (see resolveLink).
   function extractPost(post, base) {
     const roots = [post.querySelector(BODY_SEL), post.querySelector('.message-attachments, .attachedFiles')].filter(Boolean);
     const units = [];
     const anchors = [];      // the element each unit came from (used to find the text next to it)
+    const quotes = [];       // the quote each unit sits in (null: the post's own media)
     const consumed = new Set();
-    const push = (res, anchor) => { if (res) { units.push(res); anchors.push(anchor); } };
+    let curRoot = null;
+    const push = (res, anchor) => { if (res) { units.push(res); anchors.push(anchor); quotes.push(quoteOf(anchor, curRoot, base)); } };
     const SEL = 'img, video, iframe, a[href], blockquote.imgur-embed-pub, [data-media-site-id][data-media-key], [data-s9e-mediaembed-iframe]';
 
     for (const root of roots) {
+      curRoot = root;
       for (const node of root.querySelectorAll(SEL)) {
         if (consumed.has(node) || node.closest('.bbCodeBlock-sourceJump, .avatar, .username, .contentRow-figure')) continue;
         const tag = node.tagName;
@@ -1231,7 +1256,7 @@
         }
       }
     }
-    return { units, anchors };
+    return { units, anchors, quotes };
   }
 
   // ---------------------------------------------------------------------------
@@ -1312,6 +1337,8 @@
   const S = {
     items: [],               // ready items, sorted by position in the thread
     keys: new Set(),         // de-duplication keys
+    byKey: new Map(),        // de-duplication key -> item (to credit quoted media to its original post)
+    quotedLinks: new Set(),  // links seen only inside quotes so far
     pending: 0,              // external links still resolving
     totalPages: 1,
     pageErrors: 0,
@@ -1547,6 +1574,7 @@
 .xtg-compact .xtg-name{font-size:14px}
 .xtg-compact .xtg-text{margin-top:4px;font-size:13px;-webkit-line-clamp:1}
 .xtg-compact .xtg-btns,.xtg-compact .xtg-date,.xtg-compact .xtg-text.xtg-full-text{display:none}
+.xtg-compact .xtg-date.xtg-via{display:inline}
 .xtg-btns{display:flex;gap:14px;margin-top:2px}
 .xtg-text.xtg-full-text{display:none}
 .xtg-showfull .xtg-text.xtg-cap-text{display:none}
@@ -2018,6 +2046,8 @@ a.xtg-name:hover{text-decoration:underline}
     if (best) { S.autoPicked = best; showItem(best); }
   }
 
+  // Media found several times (quotes, thumbnails, proxies) is shown once. A copy inside a quote only stands in
+  // until the post it quotes turns up: the item then moves there and takes that post's author, text and link.
   function addItem(spec, pos, ctx) {
     let key;
     if (spec.type === 'dead') {
@@ -2026,32 +2056,28 @@ a.xtg-name:hover{text-decoration:underline}
       S.keys.add(key);
     } else {
       key = keyOf(spec.type === 'embed' ? spec.url : spec.candidates[0]);
-      if (S.keys.has(key)) return;
-      S.keys.add(key);
-      (spec.candidates || []).slice(1).forEach((c) => S.keys.add(keyOf(c)));
+      const keys = [key, ...(spec.candidates || []).slice(1).map(keyOf)];
+      const seen = keys.find((k) => S.keys.has(k));
+      if (seen) {
+        const known = S.byKey.get(seen);
+        if (known && known.quote && !ctx.quote && S.items.includes(known)) moveToPost(known, pos, ctx);
+        return;
+      }
+      keys.forEach((k) => S.keys.add(k));
     }
     const item = Object.assign({ candidates: [] }, spec, {
       key, pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, caption: ctx.caption || null, dead: spec.type === 'dead',
+      quote: ctx.quote || null,
     });
+    if (!item.dead) [key, ...(spec.candidates || []).slice(1).map(keyOf)].forEach((k) => S.byKey.set(k, item));
     if (item.dead) item.type = 'image';
     // here rather than when reading the page, so pages already in the cache get the same order
     if (item.candidates.length) item.candidates = directFirst(item.candidates);
     if (item.thumb) item.thumb = directUrl(item.thumb);
     if (item.type === 'image' && !item.dead) Object.assign(item, imageSizes(item));
 
-    // binary insert to keep thread order (async results arrive out of order)
-    let lo = 0, hi = S.items.length;
-    while (lo < hi) { const mid = (lo + hi) >> 1; if (comparePos(S.items[mid].pos, pos) < 0) lo = mid + 1; else hi = mid; }
-    S.items.splice(lo, 0, item);
-    const after = S.items.slice(lo + 1);
-
-    item.el = buildTile(item);
-    const nextTile = after.find((i) => i.el);
-    ui.grid.insertBefore(item.el, nextTile ? nextTile.el : null);
+    placeItem(item);
     if (!item.dead) {
-      item.thumbEl = buildThumb(item);
-      const nextThumb = after.find((i) => i.thumbEl);
-      ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
       scheduleDividers();
       if (item.type !== 'image' && !item.thumb) ensureThumb(item);
       // a file found dead on a recent visit is shown as dead straight away, without asking its host again
@@ -2067,11 +2093,45 @@ a.xtg-name:hover{text-decoration:underline}
     scheduleStatus();
   }
 
+  // Insert (or re-insert) an item at its place in thread order, with its tile and filmstrip thumbnail
+  function placeItem(item) {
+    let lo = 0, hi = S.items.length; // binary insert: async results arrive out of order
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (comparePos(S.items[mid].pos, item.pos) < 0) lo = mid + 1; else hi = mid; }
+    S.items.splice(lo, 0, item);
+    const after = S.items.slice(lo + 1);
+    const wasOn = !!(item.thumbEl && item.thumbEl.classList.contains('on'));
+    const fresh = buildTile(item);
+    if (item.el) item.el.remove();
+    item.el = fresh;
+    const nextTile = after.find((i) => i.el);
+    ui.grid.insertBefore(item.el, nextTile ? nextTile.el : null);
+    if (item.dead) return;
+    if (item.thumbEl) item.thumbEl.remove();
+    item.thumbEl = buildThumb(item);
+    item.thumbEl.classList.toggle('on', wasOn);
+    const nextThumb = after.find((i) => i.thumbEl);
+    ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
+  }
+
+  // The post that quoted this media turned up first; now the post it quotes has: move the item there
+  function moveToPost(item, pos, ctx) {
+    S.items.splice(S.items.indexOf(item), 1);
+    Object.assign(item, { pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, caption: ctx.caption || null, quote: null });
+    placeItem(item);
+    scheduleDividers();
+    if (S.cur === item) { setFocus(item.page); refreshLabels(); ui.postLink.href = postUrl(item); }
+    scheduleStatus();
+  }
+
   function handleUnit(unit, pos, ctx) {
     if (Array.isArray(unit)) { unit.forEach((spec, i) => addItem(spec, pos.concat(i), ctx)); return; }
     const linkKey = 'link:' + keyOf(unit.source);
-    if (S.keys.has(linkKey)) return; // same link already being resolved (usually a quote)
+    if (S.keys.has(linkKey)) { // same link seen before (usually a quote): resolve it again only for the post it quotes
+      if (ctx.quote || !S.quotedLinks.has(linkKey)) return;
+      S.quotedLinks.delete(linkKey); // (the lookup is cached, so this costs no request)
+    }
     S.keys.add(linkKey);
+    if (ctx.quote) S.quotedLinks.add(linkKey);
     const gen = S.gen;
     const forStart = !S.startLocked && ctx.page === S.startPage;
     if (forStart) S.startPending++;
@@ -2098,12 +2158,13 @@ a.xtg-name:hover{text-decoration:underline}
   // { link } and resolved when the page is replayed (usually straight from the link cache).
   function parsePage(doc, pageUrl) {
     return getPosts(doc).map((post) => {
-      const { units, anchors } = extractPost(post, pageUrl);
+      const { units, anchors, quotes } = extractPost(post, pageUrl);
       return {
         postId: postIdOf(post),
         meta: postMeta(post, pageUrl),
         units: units.map((u) => (Array.isArray(u) ? u : { link: u.source })),
         captions: mediaCaptions(post, anchors),
+        quotes: quotes.some(Boolean) ? quotes : undefined, // optional: pages cached before this have none
       };
     });
   }
@@ -2114,7 +2175,7 @@ a.xtg-name:hover{text-decoration:underline}
       const ctx = { page, postId: post.postId, pageUrl, meta: post.meta };
       post.units.forEach((unit, k) => {
         const u = unit.link ? resolveLink(unit.link, pageUrl) : unit;
-        if (u) handleUnit(u, [page, pi, k], Object.assign({}, ctx, { caption: (post.captions && post.captions[k]) || null }));
+        if (u) handleUnit(u, [page, pi, k], Object.assign({}, ctx, { caption: (post.captions && post.captions[k]) || null, quote: (post.quotes && post.quotes[k]) || null }));
       });
     });
   }
@@ -2143,7 +2204,8 @@ a.xtg-name:hover{text-decoration:underline}
     scheduleStatus();
   }
 
-  const postUrl = (item) => item.pageUrl + (item.postId ? '#post-' + item.postId : '');
+  // quoted media whose original post is not loaded links to that post (XenForo's goto link), else to where it is
+  const postUrl = (item) => (item.quote && item.quote.url) || item.pageUrl + (item.postId ? '#post-' + item.postId : '');
 
   // ---------------------------------------------------------------------------
   // Media loading with fallbacks
@@ -2617,7 +2679,7 @@ a.xtg-name:hover{text-decoration:underline}
     cap.innerHTML = list
       ? `${esc(tr('page', item.page))}<a href="${esc(postUrl(item))}" target="_blank" rel="noopener">${esc(tr('postLink'))}</a>` +
         (item.source ? `<a href="${esc(item.source)}" target="_blank" rel="noopener noreferrer">${esc(tr('sourceLink'))}</a>` : '')
-      : esc(tr('page', item.page)) + (item.type !== 'image' && item.meta && item.meta.author ? ` · ${esc(item.meta.author)}` : '');
+      : esc(tr('page', item.page)) + (item.type !== 'image' && authorOf(item) ? ` · ${esc(authorOf(item))}` : '');
     cap.querySelectorAll('a').forEach((a) => { a.onclick = (e) => e.stopPropagation(); });
 
     if (item.dead) {
@@ -2951,6 +3013,8 @@ a.xtg-name:hover{text-decoration:underline}
   // ---------------------------------------------------------------------------
   const sameName = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
   const showsLabel = (item) => !item.dead && !!(item.meta && item.meta.author) && (item.type === 'image' ? S.infoImages : S.infoVideos);
+  // Who posted the media: for a copy inside a quote (its own post not loaded), the quoted member
+  const authorOf = (item) => (item.quote && item.quote.author) || (item.meta && item.meta.author) || '';
 
   function nameColor(name) {
     let h = 0;
@@ -2959,12 +3023,13 @@ a.xtg-name:hover{text-decoration:underline}
   }
 
   function roleTagHTML(item) {
-    if (!S.threadStarter || !item.meta || !item.meta.author) return '';
-    const op = sameName(item.meta.author, S.threadStarter);
+    if (!S.threadStarter || !authorOf(item)) return '';
+    const op = sameName(authorOf(item), S.threadStarter);
     return `<span class="xtg-tag${op ? ' xtg-tag-op' : ''}">${esc(op ? tr('op') : tr('member'))}</span>`;
   }
 
   function posterHTML(item, withTag) {
+    if (item.quote) return quotedHTML(item, withTag);
     const m = item.meta;
     const avatar = m.avatar
       ? `<img class="xtg-av" src="${esc(m.avatar)}" alt="" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">`
@@ -2986,6 +3051,20 @@ a.xtg-name:hover{text-decoration:underline}
         (buttons ? `<div class="xtg-btns">${buttons}</div>` : '')
       : '';
     return `<div class="xtg-who">${avatar}<div class="xtg-line">${name}${withTag ? roleTagHTML(item) : ''}${date}${where}</div></div>${text}`;
+  }
+
+  // Media seen only inside a quote: the quoted member (no avatar or profile: the quote does not carry them),
+  // "quoted by" the member who quoted it, and the quoted text
+  function quotedHTML(item, withTag) {
+    const q = item.quote, by = item.meta.author;
+    const who = q.author || by;
+    const avatar = `<span class="xtg-av xtg-av-txt" style="background:${nameColor(who)}">${esc([...who][0].toUpperCase())}</span>`;
+    const via = q.author ? tr('quotedBy', by) : tr('quoted');
+    const text = q.text || '';
+    const long = text.length > 110 || text.includes('\n');
+    return `<div class="xtg-who">${avatar}<div class="xtg-line"><span class="xtg-name">${esc(who)}</span>${withTag ? roleTagHTML(item) : ''}` +
+      `<span class="xtg-date xtg-via">${esc(via)}</span></div></div>` +
+      (text ? `<div class="xtg-text xtg-cap-text">${esc(text)}</div>` + (long ? `<div class="xtg-btns"><button class="xtg-more">${esc(tr('more'))}</button></div>` : '') : '');
   }
 
   function setCornerTag(item) {
@@ -3700,7 +3779,7 @@ a.xtg-name:hover{text-decoration:underline}
     await cache.dropPrefix(`p:${THREAD_ID}:`);
     pageQ.queue = [];
     Object.assign(S, {
-      items: [], keys: new Set(), pending: 0, pagesCached: 0, pageErrors: 0, pageState: new Map(), netState: null,
+      items: [], keys: new Set(), byKey: new Map(), quotedLinks: new Set(), pending: 0, pagesCached: 0, pageErrors: 0, pageState: new Map(), netState: null,
       pendingNav: null, pageLinks: new Map(),
       cur: null, userMoved: false, resumeKey: null, startLocked: false, startPending: 0, startReplayed: false, noCache: true,
     });

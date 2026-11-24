@@ -4,6 +4,8 @@
   const S = {
     items: [],               // ready items, sorted by position in the thread
     keys: new Set(),         // de-duplication keys
+    byKey: new Map(),        // de-duplication key -> item (to credit quoted media to its original post)
+    quotedLinks: new Set(),  // links seen only inside quotes so far
     pending: 0,              // external links still resolving
     totalPages: 1,
     pageErrors: 0,

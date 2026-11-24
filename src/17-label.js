@@ -3,6 +3,8 @@
   // ---------------------------------------------------------------------------
   const sameName = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
   const showsLabel = (item) => !item.dead && !!(item.meta && item.meta.author) && (item.type === 'image' ? S.infoImages : S.infoVideos);
+  // Who posted the media: for a copy inside a quote (its own post not loaded), the quoted member
+  const authorOf = (item) => (item.quote && item.quote.author) || (item.meta && item.meta.author) || '';
 
   function nameColor(name) {
     let h = 0;
@@ -11,12 +13,13 @@
   }
 
   function roleTagHTML(item) {
-    if (!S.threadStarter || !item.meta || !item.meta.author) return '';
-    const op = sameName(item.meta.author, S.threadStarter);
+    if (!S.threadStarter || !authorOf(item)) return '';
+    const op = sameName(authorOf(item), S.threadStarter);
     return `<span class="xtg-tag${op ? ' xtg-tag-op' : ''}">${esc(op ? tr('op') : tr('member'))}</span>`;
   }
 
   function posterHTML(item, withTag) {
+    if (item.quote) return quotedHTML(item, withTag);
     const m = item.meta;
     const avatar = m.avatar
       ? `<img class="xtg-av" src="${esc(m.avatar)}" alt="" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">`
@@ -38,6 +41,20 @@
         (buttons ? `<div class="xtg-btns">${buttons}</div>` : '')
       : '';
     return `<div class="xtg-who">${avatar}<div class="xtg-line">${name}${withTag ? roleTagHTML(item) : ''}${date}${where}</div></div>${text}`;
+  }
+
+  // Media seen only inside a quote: the quoted member (no avatar or profile: the quote does not carry them),
+  // "quoted by" the member who quoted it, and the quoted text
+  function quotedHTML(item, withTag) {
+    const q = item.quote, by = item.meta.author;
+    const who = q.author || by;
+    const avatar = `<span class="xtg-av xtg-av-txt" style="background:${nameColor(who)}">${esc([...who][0].toUpperCase())}</span>`;
+    const via = q.author ? tr('quotedBy', by) : tr('quoted');
+    const text = q.text || '';
+    const long = text.length > 110 || text.includes('\n');
+    return `<div class="xtg-who">${avatar}<div class="xtg-line"><span class="xtg-name">${esc(who)}</span>${withTag ? roleTagHTML(item) : ''}` +
+      `<span class="xtg-date xtg-via">${esc(via)}</span></div></div>` +
+      (text ? `<div class="xtg-text xtg-cap-text">${esc(text)}</div>` + (long ? `<div class="xtg-btns"><button class="xtg-more">${esc(tr('more'))}</button></div>` : '') : '');
   }
 
   function setCornerTag(item) {

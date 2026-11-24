@@ -10,7 +10,7 @@
     cap.innerHTML = list
       ? `${esc(tr('page', item.page))}<a href="${esc(postUrl(item))}" target="_blank" rel="noopener">${esc(tr('postLink'))}</a>` +
         (item.source ? `<a href="${esc(item.source)}" target="_blank" rel="noopener noreferrer">${esc(tr('sourceLink'))}</a>` : '')
-      : esc(tr('page', item.page)) + (item.type !== 'image' && item.meta && item.meta.author ? ` · ${esc(item.meta.author)}` : '');
+      : esc(tr('page', item.page)) + (item.type !== 'image' && authorOf(item) ? ` · ${esc(authorOf(item))}` : '');
     cap.querySelectorAll('a').forEach((a) => { a.onclick = (e) => e.stopPropagation(); });
 
     if (item.dead) {

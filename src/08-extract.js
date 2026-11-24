@@ -1,13 +1,36 @@
+  // The innermost quote a media element sits in, as { author, postId, url, text } (any may be empty), or null.
+  // XF 2: blockquote.bbCodeBlock--quote[data-quote][data-source="post: 123"]; XF 1: .bbCodeQuote[data-author]
+  // with an .AttributionLink. Media quoted from an earlier post is credited to that post (see addItem).
+  const QUOTE_SEL = '.bbCodeBlock--quote, .bbCodeQuote';
+  function quoteOf(node, root, base) {
+    const q = node && node.closest(QUOTE_SEL);
+    if (!q || !root.contains(q)) return null;
+    const src = (q.getAttribute('data-source') || '').match(/post:\s*(\d+)/);
+    const jump = q.querySelector('.bbCodeBlock-sourceJump[href], .AttributionLink[href]');
+    const jumpUrl = jump && abs(jump.getAttribute('href'), base);
+    const jm = jumpUrl && jumpUrl.href.match(/(?:goto\/post\?id=|posts\/)(\d+)/);
+    const content = q.querySelector('.bbCodeBlock-expandContent, .bbCodeBlock-content, .quote');
+    return {
+      author: (q.getAttribute('data-quote') || q.getAttribute('data-author') || '').trim() || null,
+      postId: (src && src[1]) || (jm && jm[1]) || null,
+      url: jumpUrl ? jumpUrl.href : null,
+      text: content ? cleanText(content.cloneNode(true)).slice(0, 1000) : '',
+    };
+  }
+
   // Media of one post, in document order. Each unit is spec[] or a Promise (see resolveLink).
   function extractPost(post, base) {
     const roots = [post.querySelector(BODY_SEL), post.querySelector('.message-attachments, .attachedFiles')].filter(Boolean);
     const units = [];
     const anchors = [];      // the element each unit came from (used to find the text next to it)
+    const quotes = [];       // the quote each unit sits in (null: the post's own media)
     const consumed = new Set();
-    const push = (res, anchor) => { if (res) { units.push(res); anchors.push(anchor); } };
+    let curRoot = null;
+    const push = (res, anchor) => { if (res) { units.push(res); anchors.push(anchor); quotes.push(quoteOf(anchor, curRoot, base)); } };
     const SEL = 'img, video, iframe, a[href], blockquote.imgur-embed-pub, [data-media-site-id][data-media-key], [data-s9e-mediaembed-iframe]';
 
     for (const root of roots) {
+      curRoot = root;
       for (const node of root.querySelectorAll(SEL)) {
         if (consumed.has(node) || node.closest('.bbCodeBlock-sourceJump, .avatar, .username, .contentRow-figure')) continue;
         const tag = node.tagName;
@@ -64,7 +87,7 @@
         }
       }
     }
-    return { units, anchors };
+    return { units, anchors, quotes };
   }
 
   // ---------------------------------------------------------------------------
