@@ -128,10 +128,17 @@
     'pixhost.to', 'imagebam.com', 'imgbox.com', 'imagetwist.com', 'lensdump.com',
     'jpg.church', 'jpg.pet', 'jpg5.su', 'imgchest.com', 'pixeldrain.com',
   ];
-  // Kept deliberately slow so the forum and image hosts are not hammered (and do not block you)
-  const PAGE_CONCURRENCY = 1;      // thread pages fetched at once
-  const PAGE_DELAY_MS = 1200;      // pause between thread pages…
-  const PAGE_JITTER_MS = 600;      // …plus a random extra, so requests are not perfectly regular
+  // Thread-page requests to the forum go through one scheduler (see "Page request scheduler"). The numbers are
+  // deliberately conservative: the goal is to look like a person browsing, because that is what is happening.
+  const PAGE_INTERVAL_MS = 5000;        // base gap between two page requests, shared by every tab of the forum
+  const PAGE_JITTER_MS = 1000;          // ± random part of that gap
+  const PAGE_MAX_INTERVAL_MS = 60000;   // the gap doubles up to this when the server is slow or failing
+  const PAGE_SLOW_MS = 3000;            // a page slower than this counts as "server under load"
+  const SESSION_CAP = 40;               // page requests allowed per SESSION_WINDOW_MS before asking the user
+  const SESSION_WINDOW_MS = 10 * 60e3;
+  const TRIP_MS = 15 * 60e3;            // after a captcha / block page: no page requests for this long (or until "Continue")
+  const RATE_STRIKES = 3;               // the third "429 Too Many Requests" in a row is treated like a block page
+  const PAGE_ATTEMPTS = 4;              // one try plus three retries for timeouts / server errors
   const RESOLVE_CONCURRENCY = 2;   // external links resolved at once
   const THUMB_CONCURRENCY = 2;     // video thumbnails looked up at once
   const SLIDE_MS = 3500;           // slideshow delay for images
@@ -178,9 +185,17 @@
       loading: 'Loading…',
       counts: (i, v) => `${plural(i, 'image', 'images')} · ${plural(v, 'video', 'videos')}`,
       broken: (n) => ` · ${n} broken`,
-      loadingPages: (a, b, p) => ` · loading page ${a}/${b}` + (p ? ` (${plural(p, 'link', 'links')})` : ''),
-      stopped: (a, b) => ` · stopped at ${a}/${b} pages`,
       pageErrors: (n) => ` · ${plural(n, 'page', 'pages')} failed`,
+      pagesLoaded: (a, b) => ` · ${a}/${b} pages`,
+      netWait: ' · waiting (spacing requests)',
+      netFetching: (p) => ` · loading page ${p}`,
+      netHidden: ' · paused (tab hidden)',
+      netPaused: ' · paused',
+      bannerTrip: 'The forum is asking for verification (captcha / security check). Open the thread in a normal tab, complete it, then press Continue.',
+      bannerRate: (sec) => `The forum asked to slow down. Resuming in about ${sec} s.`,
+      bannerRateStop: 'The forum keeps asking to slow down, so loading has stopped. Wait a few minutes, then press Continue.',
+      bannerCap: (n) => `${n} pages loaded in the last 10 minutes. Paused so the forum is not overloaded.`,
+      btnContinue: 'Continue', btnOpenPage: 'Open the thread',
       dead: 'Removed or failed to load',
       deadLong: 'This image/video was removed or failed to load.',
       openOriginal: 'Open original link ↗',
@@ -225,9 +240,17 @@
       loading: 'Đang tải…',
       counts: (i, v) => `${i} ảnh · ${v} video`,
       broken: (n) => ` · ${n} hỏng`,
-      loadingPages: (a, b, p) => ` · đang tải trang ${a}/${b}` + (p ? ` (${p} link)` : ''),
-      stopped: (a, b) => ` · đã dừng ở ${a}/${b} trang`,
       pageErrors: (n) => ` · ${n} trang lỗi`,
+      pagesLoaded: (a, b) => ` · ${a}/${b} trang`,
+      netWait: ' · đang chờ (giãn cách yêu cầu)',
+      netFetching: (p) => ` · đang tải trang ${p}`,
+      netHidden: ' · tạm dừng (tab ẩn)',
+      netPaused: ' · đã dừng',
+      bannerTrip: 'Diễn đàn đang yêu cầu xác minh (captcha / kiểm tra bảo mật). Mở chủ đề trong tab thường để xác minh, rồi bấm Tiếp tục.',
+      bannerRate: (sec) => `Diễn đàn yêu cầu giảm tốc. Tự tiếp tục sau khoảng ${sec} giây.`,
+      bannerRateStop: 'Diễn đàn liên tục yêu cầu giảm tốc nên đã dừng tải. Đợi vài phút rồi bấm Tiếp tục.',
+      bannerCap: (n) => `Đã tải ${n} trang trong 10 phút qua. Tạm dừng để không làm quá tải diễn đàn.`,
+      btnContinue: 'Tiếp tục', btnOpenPage: 'Mở chủ đề',
       dead: 'Đã bị xoá hoặc không tải được',
       deadLong: 'Ảnh/video này đã bị xoá hoặc không tải được.',
       openOriginal: 'Mở link gốc ↗',
@@ -414,6 +437,9 @@
   const HOUR = 3600e3, DAY = 24 * HOUR;
   const CACHE_SCHEMA = 2; // bump when the shape of cached pages changes
   const PAGE_TTL = 12 * HOUR, LINK_TTL = 7 * DAY, DEAD_LINK_TTL = DAY, THUMB_TTL = 7 * DAY, MAX_THREADS = 30;
+  // Cached pages: old pages rarely change, the last few (where new posts land) are refreshed sooner
+  const PAGE_TTL_OLD = 7 * DAY, PAGE_TTL_RECENT = HOUR;
+  const pageTtl = (p) => (p >= S.totalPages - 2 ? PAGE_TTL_RECENT : PAGE_TTL_OLD);
   // Thread id, whatever the URL scheme: XF's content key, else the last ".123/" or "/123/" in the canonical URL
   const THREAD_ID = (() => {
     const key = (docEl.getAttribute('data-content-key') || '').match(/^thread-(\d+)$/);
@@ -462,6 +488,11 @@
       },
       put: (key, value) => run('readwrite', (store) => store.put(Object.assign({}, value, { at: Date.now() }), key)),
       dropPrefix: (prefix) => run('readwrite', (store) => store.delete(range(prefix))),
+      async entries(prefix) {
+        const keys = (await run('readonly', (store) => store.getAllKeys(range(prefix)))) || [];
+        const vals = (await run('readonly', (store) => store.getAll(range(prefix)))) || [];
+        return keys.map((k, i) => [k, vals[i]]);
+      },
       // At most once a day: keep the MAX_THREADS most recent threads and drop expired entries
       async prune() {
         if (await api.get('meta:prune', DAY)) return;
@@ -473,7 +504,7 @@
           await api.dropPrefix('p:' + k.slice(2) + ':');
           await run('readwrite', (store) => store.delete(k));
         }
-        await sweep('p:', PAGE_TTL);
+        await sweep('p:', PAGE_TTL_OLD);
         await sweep('l:', LINK_TTL);
         await sweep('t:', THUMB_TTL);
       },
@@ -707,32 +738,201 @@
     return (n) => (n === 1 ? base : base + 'page-' + n);
   }
 
-  // One attempt plus up to 3 retries. Each attempt is aborted after PAGE_TIMEOUT_MS so a hanging request
-  // cannot stall the page queue; a page that still fails is counted as an error and loading moves on.
-  async function fetchDoc(url) {
-    let lastError = null;
-    for (let i = 0; i < 4; i++) {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), PAGE_TIMEOUT_MS);
-      let wait = 5000 * (i + 1);
-      try {
-        const r = await fetch(url, { credentials: 'include', signal: ctrl.signal });
-        if (r.ok) return parseHTML(await r.text());
-        if (r.status !== 429 && r.status < 500) throw Object.assign(new Error('HTTP ' + r.status), { final: true });
-        // rate limited / server error: honour Retry-After when given, otherwise back off progressively
-        const retryAfter = parseInt(r.headers.get('Retry-After'), 10);
-        if (retryAfter > 0) wait = Math.min(retryAfter, 120) * 1000;
-        lastError = new Error('HTTP ' + r.status);
-      } catch (e) {
-        if (e.final) throw e;
-        lastError = e; // timeout or network error
-      } finally {
-        clearTimeout(timer);
-      }
-      if (i < 3) await sleep(wait);
-    }
-    throw lastError || new Error('too many retries');
+  // ---------------------------------------------------------------------------
+  // Page request scheduler
+  // Every thread-page request to the forum goes through here:
+  //   - one request at a time per forum, across all tabs (Web Locks API);
+  //   - spaced PAGE_INTERVAL_MS ± jitter apart, the timestamp being shared by all tabs (localStorage);
+  //   - the gap doubles when the server is slow or failing and shrinks back slowly (AIMD);
+  //   - at most SESSION_CAP requests per SESSION_WINDOW_MS, then the user has to press "Continue";
+  //   - a captcha / block page (or 403 / 503) stops everything for TRIP_MS, in every tab, with no retry;
+  //   - nothing runs while the tab is hidden or the gallery is closed.
+  // ---------------------------------------------------------------------------
+  const net = {
+    read: () => store.get('net', {}),
+    write: (patch) => store.set('net', Object.assign(store.get('net', {}), patch)),
+  };
+  const pageQ = { queue: [], running: false };
+
+  function blockReason() {
+    if (document.hidden) return 'hidden';
+    if (!ui || ui.root.hidden) return 'closed';
+    const n = net.read();
+    if (n.trip && Date.now() < n.trip.until) return n.trip.auto ? 'rate' : 'trip';
+    const from = Math.max(n.capFrom || 0, Date.now() - SESSION_WINDOW_MS);
+    if ((n.log || []).filter((t) => t > from).length >= SESSION_CAP) return 'cap';
+    return null;
   }
+
+  // AIMD: double the gap after a slow / failed request, shrink it by 15% after a quick one
+  function adaptRate(ok) {
+    const cur = net.read().interval || PAGE_INTERVAL_MS;
+    net.write({ interval: ok ? Math.max(PAGE_INTERVAL_MS, Math.round(cur * 0.85)) : Math.min(PAGE_MAX_INTERVAL_MS, cur * 2) });
+  }
+
+  function trip(ms, auto, reason) {
+    net.write({ trip: { until: Date.now() + ms, auto, reason } });
+    if (auto) setTimeout(pumpPages, ms + 500); // rate limit: resume by itself once the forum's delay has passed
+    scheduleStatus();
+  }
+
+  // A page that is not the thread but a security check / captcha / block page
+  function isChallenge(status, text, doc) {
+    if (doc.querySelector('article.message, li.message')) return false;
+    if (status === 403 || status === 503) return true;
+    return /cf-chl|challenge-platform|cf_chl_opt|cf-turnstile|Just a moment\.\.\.|Attention Required|captcha/i.test(text.slice(0, 60000));
+  }
+
+  const netError = (kind, extra) => Object.assign(new Error(kind), { kind }, extra);
+
+  // One request, aborted after PAGE_TIMEOUT_MS. Throws an error whose .kind is
+  // 'challenge' | 'ratelimit' | 'transient' (timeout, network, 5xx) | 'final' (404 and the like).
+  async function fetchPage(url) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), PAGE_TIMEOUT_MS);
+    const t0 = Date.now();
+    try {
+      const r = await fetch(url, { credentials: 'include', signal: ctrl.signal });
+      const text = await r.text();
+      const doc = parseHTML(text);
+      if (r.status === 429) {
+        const ra = parseInt(r.headers.get('Retry-After'), 10);
+        throw netError('ratelimit', { wait: (ra > 0 ? Math.min(ra, 600) : 120) * 1000 });
+      }
+      if (isChallenge(r.status, text, doc)) throw netError('challenge');
+      if (r.status >= 500) { adaptRate(false); throw netError('transient'); }
+      if (!r.ok) throw netError('final');
+      adaptRate(Date.now() - t0 < PAGE_SLOW_MS);
+      if (net.read().strikes) net.write({ strikes: 0 });
+      return doc;
+    } catch (e) {
+      if (e.kind) throw e;
+      adaptRate(false);
+      throw netError('transient'); // timeout or network error
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  const pageKey = (p) => `p:${THREAD_ID}:${p}`;
+
+  // Queue a page; prio: smaller runs first. explicit: asked for by the user (kept even outside the window).
+  function requestPage(p, opts = {}) {
+    if (p < 1 || p > S.totalPages) return;
+    const st = S.pageState.get(p);
+    if (st === 'loaded' || st === 'loading') return;
+    if (st === 'failed' && !opts.explicit) return;
+    const job = pageQ.queue.find((j) => j.page === p);
+    if (job) job.explicit = job.explicit || !!opts.explicit;
+    else pageQ.queue.push({ page: p, attempts: 0, explicit: !!opts.explicit });
+    S.pageState.set(p, 'queued');
+    pumpPages();
+  }
+
+  async function pumpPages() {
+    if (pageQ.running || !S.pageUrl) return;
+    pageQ.running = true;
+    try {
+      while (pageQ.queue.length) {
+        const why = blockReason();
+        S.netState = why;
+        if (why) break; // resumed by: tab visible again, gallery opened, "Continue", or the rate-limit timer
+        // nearest to the page being viewed first
+        pageQ.queue.sort((a, b) => Math.abs(a.page - S.focusPage) - Math.abs(b.page - S.focusPage));
+        const job = pageQ.queue.shift();
+        await runPageJob(job);
+      }
+    } finally {
+      pageQ.running = false;
+      if (!pageQ.queue.length) S.netState = null;
+      scheduleStatus();
+    }
+  }
+
+  async function runPageJob(job) {
+    const gen = S.gen, p = job.page, url = S.pageUrl(p);
+    S.pageState.set(p, 'loading');
+    scheduleStatus();
+    const work = async () => {
+      // another tab may have loaded this page while we were waiting for the lock
+      const hit = !S.noCache && await cache.get(pageKey(p), pageTtl(p));
+      if (hit && hit.v === CACHE_SCHEMA) return { posts: hit.posts, cached: true };
+      const n = net.read();
+      const wait = (n.last || 0) + (n.interval || PAGE_INTERVAL_MS) + (Math.random() * 2 - 1) * PAGE_JITTER_MS - Date.now();
+      if (wait > 0) {
+        S.netState = 'wait';
+        scheduleStatus();
+        await sleep(wait);
+      }
+      if (blockReason() || gen !== S.gen) return { deferred: true }; // conditions changed while waiting
+      const now = Date.now();
+      net.write({ last: now, log: (net.read().log || []).filter((t) => t > now - SESSION_WINDOW_MS).concat(now) });
+      S.netState = 'fetching';
+      S.fetchingPage = p;
+      scheduleStatus();
+      return { doc: await fetchPage(url) };
+    };
+    let out;
+    try {
+      out = navigator.locks ? await navigator.locks.request('xtg-pages-' + location.host, work) : await work();
+    } catch (e) {
+      out = { error: e };
+    }
+    S.fetchingPage = null;
+    if (gen !== S.gen) return;
+    if (out.deferred) { requeue(job); return; }
+    if (out.error) {
+      const kind = out.error.kind;
+      if (kind === 'challenge') { trip(TRIP_MS, false); requeue(job); return; }
+      if (kind === 'ratelimit') {
+        // repeated 429s: back off twice as long each time, and stop for good on the third one
+        const strikes = (net.read().strikes || 0) + 1;
+        net.write({ strikes });
+        adaptRate(false);
+        if (strikes >= RATE_STRIKES) trip(TRIP_MS, false, 'rate');
+        else trip(out.error.wait * 2 ** (strikes - 1), true);
+        requeue(job);
+        return;
+      }
+      if (kind === 'transient' && ++job.attempts < PAGE_ATTEMPTS) { requeue(job); return; }
+      S.pageState.set(p, 'failed');
+      S.pageErrors++;
+      console.warn('[XenForo Thread Gallery] failed to load page', p, out.error);
+      scheduleStatus();
+      return;
+    }
+    const posts = out.posts || parsePage(out.doc, url);
+    if (out.cached) S.pagesCached++;
+    else cache.put(pageKey(p), { posts, v: CACHE_SCHEMA });
+    markPageLoaded(p, posts, url);
+  }
+
+  function requeue(job) {
+    S.pageState.set(job.page, 'queued');
+    pageQ.queue.push(job);
+  }
+
+  function markPageLoaded(p, posts, url) {
+    S.pageState.set(p, 'loaded');
+    replayPage(posts, p, url);
+    scheduleStatus();
+  }
+
+  function stopPages() {
+    pageQ.queue.forEach((j) => S.pageState.set(j.page, 'unloaded'));
+    pageQ.queue = [];
+    scheduleStatus();
+  }
+
+  function netContinue() {
+    const n = net.read();
+    if (n.trip) net.write({ trip: null, strikes: 0 });
+    else net.write({ capFrom: Date.now() }); // "Continue" after the session cap: a fresh allowance
+    pumpPages();
+  }
+
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pumpPages(); if (ui) scheduleStatus(); });
+  window.addEventListener('storage', (e) => { if (e.key === 'xtg_net' && ui) { scheduleStatus(); pumpPages(); } });
 
   // iframe URL, including lazy embeds from s9e MediaSites and XenForo
   function iframeSrc(node) {
@@ -908,11 +1108,9 @@
     items: [],               // ready items, sorted by position in the thread
     keys: new Set(),         // de-duplication keys
     pending: 0,              // external links still resolving
-    pagesDone: 0,
     totalPages: 1,
     pageErrors: 0,
     started: false,
-    stopped: false,
     view: store.get('view', 'viewer'),         // viewer | grid | list
     showDead: false,
     infoVideos: store.get('infoVideos', store.get('showLabel', true)),
@@ -934,6 +1132,11 @@
     gen: 0,                  // bumped by "Reload" so late results of the previous load are ignored
     noCache: false,          // set by "Reload": ignore cached data for this load
     pagesCached: 0,
+    pageState: new Map(),    // page -> 'queued' | 'loading' | 'loaded' | 'failed' | 'unloaded'
+    pageUrl: null,
+    focusPage: 1,            // page of the item being viewed (the queue serves pages near it first)
+    netState: null,          // why page loading is waiting: 'wait' | 'fetching' | 'hidden' | 'cap' | 'trip' | 'rate'
+    fetchingPage: null,
     startPage: 1,            // the page the user is reading: the gallery opens on its first item
     resumeKey: null,         // last viewed item, when it is on the page being read
     startLocked: false,      // the opening item has been chosen: no more automatic switching
@@ -1081,6 +1284,13 @@
 .xtg-list .xtg-cap{position:static;opacity:1;background:none;color:#8b9097;padding:4px 0 0}
 .xtg-list .xtg-dead .xtg-ph{height:70px}
 .xtg-empty{color:#8b9097;text-align:center;padding:60px 0}
+.xtg-banner{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:9px 16px;background:#3a2a10;border-bottom:1px solid #5a4318;
+  color:#f3e2bf;font-size:13px}
+.xtg-banner[hidden]{display:none}
+.xtg-banner span{flex:1 1 260px}
+.xtg-banner button,.xtg-banner a{padding:5px 12px;border:0;border-radius:6px;background:#f0b542;color:#241a06;font:600 12.5px system-ui,sans-serif;
+  text-decoration:none;cursor:pointer;white-space:nowrap}
+.xtg-banner a{background:transparent;color:#f3e2bf;border:1px solid #8a6a2a}
 .xtg-toast{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);background:#2a2d33;color:#fff;padding:8px 14px;
   border-radius:8px;font-size:13px;z-index:6}
 
@@ -1240,6 +1450,7 @@ a.xtg-name:hover{text-decoration:underline}
             <button data-act="hosts">${esc(tr('optHosts'))}</button>
           </div>
         </div>
+        <div class="xtg-banner" hidden></div>
         <div class="xtg-body">
           <div class="xtg-viewer">
             <div class="xtg-stagebox">
@@ -1271,7 +1482,7 @@ a.xtg-name:hover{text-decoration:underline}
       prevBtns: root.querySelectorAll('.xtg-prev, .xtg-sprev'), nextBtns: root.querySelectorAll('.xtg-next, .xtg-snext'),
       firstBtn: q('.xtg-first'), lastBtn: q('.xtg-last'),
       viewer: q('.xtg-viewer'), stage: q('.xtg-stage'), strip: q('.xtg-strip'),
-      scroll: q('.xtg-scroll'), grid: q('.xtg-grid'), empty: q('.xtg-empty'),
+      scroll: q('.xtg-scroll'), grid: q('.xtg-grid'), empty: q('.xtg-empty'), banner: q('.xtg-banner'),
     };
 
     root.addEventListener('click', (e) => {
@@ -1294,13 +1505,14 @@ a.xtg-name:hover{text-decoration:underline}
       const act = e.target.closest('[data-act]');
       switch (act && act.getAttribute('data-act')) {
         case 'close': closeGallery(); break;
-        case 'stop': S.stopped = true; scheduleStatus(); break;
+        case 'stop': stopPages(); break;
         case 'play': toggleSlideshow(); break;
         case 'menu': ui.menu.hidden = !ui.menu.hidden; ui.fmenu.hidden = true; break;
         case 'filter': ui.fmenu.hidden = !ui.fmenu.hidden; ui.menu.hidden = true; break;
         case 'hosts': ui.menu.hidden = true; editHosts(); break;
         case 'reload': reloadThread(); break;
         case 'retry': renderStage(); break;
+        case 'netcontinue': netContinue(); break;
         default: break;
       }
     });
@@ -1426,7 +1638,28 @@ a.xtg-name:hover{text-decoration:underline}
     updateDividers();
     scheduleStatus();
   }
-  const isLoading = () => !S.stopped && (S.pagesDone < S.totalPages || S.pending > 0);
+  const loadedPages = () => { let n = 0; S.pageState.forEach((v) => { if (v === 'loaded') n++; }); return n; };
+  const isLoading = () => pageQ.queue.length > 0 || pageQ.running || S.pending > 0;
+
+  function renderBanner() {
+    const st = S.netState;
+    let html = '';
+    if (st === 'trip') {
+      if (net.read().trip?.reason === 'rate') html = `<span>${esc(tr('bannerRateStop'))}</span><button data-act="netcontinue">${esc(tr('btnContinue'))}</button>`;
+      else html = `<span>${esc(tr('bannerTrip'))}</span><a href="${esc(location.href.split('#')[0])}" target="_blank" rel="noopener">${esc(tr('btnOpenPage'))}</a>` +
+        `<button data-act="netcontinue">${esc(tr('btnContinue'))}</button>`;
+    } else if (st === 'rate') {
+      const left = Math.max(1, Math.round(((net.read().trip || {}).until - Date.now()) / 1000));
+      html = `<span>${esc(tr('bannerRate', left))}</span>`;
+    } else if (st === 'cap') {
+      html = `<span>${esc(tr('bannerCap', SESSION_CAP))}</span><button data-act="netcontinue">${esc(tr('btnContinue'))}</button>`;
+    }
+    if (ui.banner.dataset.html !== html) {
+      ui.banner.dataset.html = html;
+      ui.banner.innerHTML = html;
+      ui.banner.hidden = !html;
+    }
+  }
   let statusQueued = false;
   function scheduleStatus() {
     if (statusQueued || !ui) return;
@@ -1446,11 +1679,16 @@ a.xtg-name:hover{text-decoration:underline}
     const loading = isLoading();
     let st = '';
     if (dead) st += tr('broken', dead);
-    if (loading) st += tr('loadingPages', S.pagesDone, S.totalPages, S.pending);
-    else if (S.stopped && S.pagesDone < S.totalPages) st += tr('stopped', S.pagesDone, S.totalPages);
+    const loaded = loadedPages();
+    if (S.totalPages > 1 && loaded < S.totalPages) st += tr('pagesLoaded', loaded, S.totalPages);
+    if (S.netState === 'wait') st += tr('netWait');
+    else if (S.netState === 'fetching') st += tr('netFetching', S.fetchingPage);
+    else if (S.netState === 'hidden') st += tr('netHidden');
+    else if (S.netState === 'cap' || S.netState === 'trip' || S.netState === 'rate') st += tr('netPaused');
     if (S.pagesCached) st += tr('fromCache', S.pagesCached);
     if (S.pageErrors) st += tr('pageErrors', S.pageErrors);
     ui.status.textContent = st.replace(/^ · /, '');
+    renderBanner();
     ui.stopBtn.hidden = !loading;
     const pos = S.cur && !S.cur.dead ? live.indexOf(S.cur) : -1;
     ui.counter.textContent = `${pos + 1} / ${live.length}`;
@@ -2539,10 +2777,10 @@ a.xtg-name:hover{text-decoration:underline}
   // ---------------------------------------------------------------------------
   // Loading the whole thread
   // ---------------------------------------------------------------------------
-  // Page sources, in this order of preference:
-  //   - the page being read: parsed from the live document (no request, always fresh)
-  //   - other pages: from the cache when younger than PAGE_TTL
-  //   - the last page: always fetched, since new posts land there
+  // Page sources, in this order of preference (none of the first two costs a request):
+  //   1. the page being read: parsed from the live document;
+  //   2. pages already in the cache (old pages are kept a week, recent ones an hour);
+  //   3. the forum, through the page request scheduler.
   async function loadThread() {
     S.started = true;
     const gen = S.gen;
@@ -2550,48 +2788,43 @@ a.xtg-name:hover{text-decoration:underline}
     setThreadStarter(detectThreadStarter(document), true);
     const cur = currentPage();
     S.startPage = cur;
-    const pageUrl = makePageUrl();
+    S.focusPage = cur;
+    S.pageUrl = makePageUrl();
 
     const rec = await cache.get('v:' + THREAD_ID);
     if (gen !== S.gen) return;
     S.resumeKey = !S.noCache && rec && rec.lastPage === cur && Date.now() - rec.at < PAGE_TTL ? rec.lastKey : null;
     cache.put('v:' + THREAD_ID, Object.assign({}, rec, { totalPages: S.totalPages })); // marks the thread as recently used
     cache.prune();
-    scheduleStatus();
 
-    const pages = [cur, ...Array.from({ length: S.totalPages }, (_, i) => i + 1).filter((p) => p !== cur)];
-    const pageQueue = makeQueue(PAGE_CONCURRENCY);
-    await Promise.all(pages.map((p) => pageQueue(async () => {
-      if (S.stopped || gen !== S.gen) return;
-      const url = pageUrl(p);
-      const key = `p:${THREAD_ID}:${p}`;
-      let fetched = false;
-      try {
-        let posts = null;
-        if (p === cur) {
-          posts = parsePage(document, url);
-        } else if (p !== S.totalPages && !S.noCache) {
-          const hit = await cache.get(key, PAGE_TTL);
-          if (hit && hit.v === CACHE_SCHEMA) { posts = hit.posts; S.pagesCached++; }
-        }
-        if (!posts) {
-          posts = parsePage(await fetchDoc(url), url);
-          fetched = true;
-        }
-        if (p === cur || fetched) cache.put(key, { posts, v: CACHE_SCHEMA });
-        if (!S.stopped && gen === S.gen) replayPage(posts, p, url);
-        if (p === cur) { S.startReplayed = true; maybeLockStart(); setTimeout(lockStart, 1500); }
-      } catch (e) {
-        S.pageErrors++;
-        console.warn('[XenForo Thread Gallery] failed to load page', p, e);
+    // 1. the page being read
+    const curUrl = S.pageUrl(cur);
+    const curPosts = parsePage(document, curUrl);
+    cache.put(pageKey(cur), { posts: curPosts, v: CACHE_SCHEMA });
+    markPageLoaded(cur, curPosts, curUrl);
+    S.startReplayed = true;
+    maybeLockStart();
+    setTimeout(lockStart, 1500);
+
+    // 2. pages already cached
+    if (!S.noCache) {
+      for (const [key, val] of await cache.entries(`p:${THREAD_ID}:`)) {
+        if (gen !== S.gen) return;
+        const p = +key.split(':').pop();
+        if (p === cur || p > S.totalPages || !val || val.v !== CACHE_SCHEMA || Date.now() - val.at > pageTtl(p)) continue;
+        S.pagesCached++;
+        markPageLoaded(p, val.posts, S.pageUrl(p));
       }
-      if (gen !== S.gen) return;
-      S.pagesDone++;
-      scheduleStatus();
-      if (fetched) await sleep(PAGE_DELAY_MS + Math.random() * PAGE_JITTER_MS); // be gentle with the forum
-    })));
-    if (gen === S.gen) lockStart();
+    }
+
+    // 3. the rest, through the scheduler
+    queueNeededPages();
     scheduleStatus();
+  }
+
+  // Step 1 keeps the previous behaviour (the whole thread); step 2 replaces this with the loading modes
+  function queueNeededPages() {
+    for (let p = 1; p <= S.totalPages; p++) requestPage(p);
   }
 
   // Start over without the cache (pages, links and thumbnails are fetched again and re-cached)
@@ -2600,9 +2833,10 @@ a.xtg-name:hover{text-decoration:underline}
     S.gen++;
     clearTimeout(S.slideTimer);
     await cache.dropPrefix(`p:${THREAD_ID}:`);
+    pageQ.queue = [];
     Object.assign(S, {
-      items: [], keys: new Set(), pending: 0, pagesDone: 0, pagesCached: 0, pageErrors: 0,
-      stopped: false, cur: null, userMoved: false, resumeKey: null, startLocked: false, startPending: 0, startReplayed: false, noCache: true,
+      items: [], keys: new Set(), pending: 0, pagesCached: 0, pageErrors: 0, pageState: new Map(), netState: null,
+      cur: null, userMoved: false, resumeKey: null, startLocked: false, startPending: 0, startReplayed: false, noCache: true,
     });
     ui.grid.innerHTML = '';
     ui.strip.innerHTML = '';
@@ -2626,6 +2860,7 @@ a.xtg-name:hover{text-decoration:underline}
       applyView();
     }
     if (!S.started) loadThread();
+    else pumpPages(); // resume page loading paused while the gallery was closed
   }
 
   function closeGallery() {
