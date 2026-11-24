@@ -16,6 +16,17 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
+-
+
+### Thay đổi
+-
+
+### Sửa lỗi
+-
+
+## [3.2.0] - 2026-11-25
+
+### Thêm
 - Ghim thông tin ảnh (phím **P**, hoặc nút ghim trên phần thông tin): thông tin luôn hiện ở mọi ảnh, ở dạng gọn và nằm cạnh ảnh (bên dưới, bên phải với ảnh dọc, hoặc thu nhỏ ảnh một chút) nên không bao giờ che ảnh. Di chuột vào thì mở rộng. Lựa chọn được ghi nhớ.
 - Trang kế được tải khi còn 3 item nữa là hết phần đã tải, nên album không còn dừng ở item cuối để chờ (cả ở chế độ Saver; trừ chế độ duyệt, nơi chỉ mở được trang bằng cách đi tới nó).
 

@@ -16,6 +16,17 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+## [3.2.0] - 2026-11-25
+
+### Added
 - Pin the image info (**P**, or the pin button on the info): it stays shown on every image, compact and next to the picture (below it, on its right for tall pictures, or with the picture shrunk a little), so it never covers it. Hovering expands it. The choice is remembered.
 - The next page is requested when 3 items are left before the end of what is loaded, so the gallery does not stop at the last item to wait for it (also in Saver mode; not in browse mode, where pages can only be opened by going there).
 
