@@ -16,13 +16,21 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+## [2.5.0] - 2026-11-24
+
+### Added
 - A small "open in a new tab" icon after each thread title in XenForo thread lists (forums, new posts, search results), including items loaded later.
 
 ### Changed
 - Works with any forum URL scheme (`/t/`, `/chu-de/`, custom routes): thread pages are recognised from their XenForo markup instead of `threads/` in the URL, and the thread id is taken from the page's canonical URL. The script is allowed on every site but stops immediately on non-XenForo pages; large non-forum sites are excluded.
-
-### Fixed
--
 
 ## [2.4.0] - 2026-11-24
 

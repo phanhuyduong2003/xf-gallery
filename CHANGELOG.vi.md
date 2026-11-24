@@ -16,13 +16,21 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
+-
+
+### Thay đổi
+-
+
+### Sửa lỗi
+-
+
+## [2.5.0] - 2026-11-24
+
+### Thêm
 - Icon nhỏ "mở trong tab mới" sau tiêu đề mỗi chủ đề trong danh sách chủ đề XenForo (chuyên mục, bài mới, kết quả tìm kiếm), kể cả các mục nạp thêm sau.
 
 ### Thay đổi
 - Chạy được với mọi kiểu địa chỉ diễn đàn (`/t/`, `/chu-de/`, địa chỉ tuỳ chỉnh): trang chủ đề được nhận ra qua mã trang XenForo thay vì chữ `threads/` trong địa chỉ, mã chủ đề lấy từ link chuẩn của trang. Script được phép chạy trên mọi trang nhưng dừng ngay trên trang không phải XenForo; các trang lớn không phải diễn đàn được loại trừ sẵn.
-
-### Sửa lỗi
--
 
 ## [2.4.0] - 2026-11-24
 
