@@ -7,6 +7,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 ## Tính năng
 
 - **Cả chủ đề, mọi trang.** Bấm nút **Album** trên trang chủ đề bất kỳ. Script tải ngầm các trang (từng trang một, nghỉ một chút giữa các trang để không làm quá tải diễn đàn) và hiện ảnh/video theo đúng thứ tự bài viết trong lúc tải.
+- **Mở tab mới:** icon ↗ nhỏ sau tiêu đề mỗi chủ đề trong danh sách chủ đề.
 - **Bộ lọc** tất cả / ảnh / video, cho biết ảnh thuộc trang nào, vạch chia trang trong dải ảnh, về mục đầu / cuối.
 - **3 kiểu xem**
   - **Xem**: từng ảnh, kèm dải ảnh thu nhỏ. Phím mũi tên hoặc vuốt để chuyển; bấm, lăn chuột hoặc chụm 2 ngón để phóng to; kéo để di chuyển.
@@ -51,7 +52,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 
 ## Lưu ý
 
-- Chạy trên XenForo 1.x và 2.x với địa chỉ chủ đề có chữ `threads/`. Nếu diễn đàn dùng địa chỉ khác, thêm một dòng `// @match https://ten-dien-dan.com/*` vào phần đầu script.
+- Chạy trên mọi diễn đàn XenForo 1.x / 2.x, với mọi kiểu địa chỉ (`/threads/`, `/t/`, địa chỉ tuỳ chỉnh). Script được phép chạy trên mọi trang nhưng nhận ra trang XenForo qua mã trang và **dừng ngay trên mọi trang khác**, không chèn gì và không gửi dữ liệu đi đâu. Các trang lớn không phải diễn đàn được loại trừ sẵn.
 - **Tampermonkey hỏi "Một tập lệnh người dùng muốn truy cập một tài nguyên xuyên nguồn gốc"**: script cần tải file và trang từ các dịch vụ lưu ảnh. Bấm **Luôn cho phép tất cả các tên miền** (*Always allow all domains*) để không bị hỏi lại với từng dịch vụ. Nếu lỡ chọn nút khác: mở bảng điều khiển Tampermonkey → script này → thẻ **Cài đặt** (*Settings*) → **Bảo mật XHR** (*XHR Security*) → **User domain whitelist**, thêm một dòng `*` rồi lưu.
 - Tuỳ chọn (kiểu xem, tắt tiếng, nhãn, danh sách dịch vụ ảnh) được lưu riêng cho từng diễn đàn trong `localStorage`; bộ nhớ đệm nằm trong IndexedDB (30 chủ đề gần nhất). **Tuỳ chọn → Tải lại chủ đề này** để bỏ qua bộ nhớ đệm.
 - Ảnh/video đã bị xoá khỏi nơi lưu thì không lấy lại được, chỉ được ẩn đi.

@@ -36,11 +36,9 @@ If the old "XenForo Album" script is installed, remove it first, otherwise there
 2. Install from the script's Greasy Fork page (**Install** button), or open the manager's dashboard → *Create a new script* → paste the whole of `xenforo-thread-gallery.user.js` → Save.
 3. Open a thread on the forum. An **Album** button appears in the bottom-right corner.
 
-If the button does not appear (the forum's URLs do not contain `threads`), add a `// @match` line for the forum's domain to the script header, for example:
+The script works whatever the forum's URLs look like (`/threads/`, `/t/`, `/chu-de/`, `index.php?…`): it is allowed on every site, recognises XenForo thread pages from their markup (`data-template="thread_view…"` on XF 2, `thread_view` on XF 1), and stops immediately on any other page without adding anything or making any request. Large non-forum sites (Google, YouTube, Facebook…) are excluded outright.
 
-```
-// @match        https://your-forum.example/*
-```
+On XenForo thread lists (forums, new posts, search results…) a small ↗ icon after each thread title opens the thread in a new tab.
 
 ### Allowing cross-origin requests (all domains)
 

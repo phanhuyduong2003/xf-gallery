@@ -7,6 +7,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
 ## Features
 
 - **Whole thread, every page.** Click the **Album** button on any thread page. Pages are fetched in the background (one page at a time, with a short pause between pages so the forum is not overloaded) and media appears in thread order as it loads.
+- **Open in new tab:** a small ↗ icon after each thread title in thread lists.
 - **Filter** all / images / videos, page indicator and page dividers in the filmstrip, jump to first / last.
 - **Three views**
   - **View**: one item at a time with a filmstrip. Arrow keys / swipe to navigate; click, mouse wheel or pinch to zoom; drag to pan.
@@ -51,7 +52,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
 
 ## Notes
 
-- Works on XenForo 1.x and 2.x thread URLs containing `threads/`. If your forum uses different URLs, add a `// @match https://your-forum.example/*` line.
+- Works on any XenForo 1.x / 2.x forum, whatever its URLs (`/threads/`, `/t/`, custom routes). The script is allowed on all sites but recognises XenForo pages from their markup and **stops immediately everywhere else**, without adding anything or sending any data. Big non-forum sites are excluded outright.
 - **Tampermonkey asks "A userscript wants to access a cross-origin resource"**: the script fetches files and pages from image hosts. Click **Always allow all domains** so it doesn't ask again for every host. If you already picked another button, open the Tampermonkey dashboard → this script → **Settings** → **XHR Security** → **User domain whitelist**, add a line with `*`, and save.
 - Settings (view mode, mute, label options, host list) are stored per forum in `localStorage`; the cache lives in IndexedDB (30 most recent threads). **Options → Reload this thread** ignores the cache.
 - Media that was deleted from its host cannot be recovered; it is only hidden.

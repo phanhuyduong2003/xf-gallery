@@ -36,11 +36,9 @@ Nếu đã cài bản cũ "XenForo Album", hãy gỡ nó đi trước khi cài b
 2. Cài từ trang Greasy Fork của script (nút **Install**), hoặc mở bảng điều khiển của tiện ích → *Tạo script mới* → dán toàn bộ `xenforo-thread-gallery.user.js` → Lưu.
 3. Mở một chủ đề trên diễn đàn. Góc phải dưới sẽ có nút **Album**.
 
-Nếu không thấy nút (diễn đàn dùng địa chỉ không có chữ `threads`), thêm một dòng `// @match` cho tên miền diễn đàn vào phần đầu script, ví dụ:
+Script chạy được với mọi kiểu địa chỉ của diễn đàn (`/threads/`, `/t/`, `/chu-de/`, `index.php?…`): script được phép chạy trên mọi trang, nhận ra trang chủ đề XenForo qua mã trang (`data-template="thread_view…"` ở XF 2, `thread_view` ở XF 1), và dừng ngay trên mọi trang khác, không chèn gì và không gửi yêu cầu nào. Các trang lớn không phải diễn đàn (Google, YouTube, Facebook…) được loại trừ sẵn.
 
-```
-// @match        https://ten-dien-dan.com/*
-```
+Trên các danh sách chủ đề XenForo (chuyên mục, bài mới, kết quả tìm kiếm…), một icon ↗ nhỏ sau tiêu đề mỗi chủ đề để mở chủ đề đó trong tab mới.
 
 ### Cho phép truy cập mọi tên miền
 
