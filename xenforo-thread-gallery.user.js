@@ -9,8 +9,35 @@
 // @license          MIT
 // @contributionURL  https://ko-fi.com/dylanphan
 // @icon             data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231f6feb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 22H4a2 2 0 0 1-2-2V6'/%3E%3Cpath d='m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18'/%3E%3Ccircle cx='12' cy='8' r='2'/%3E%3Crect width='16' height='16' x='6' y='2' rx='2'/%3E%3C/svg%3E
-// @match            *://*/*threads/*
-// @match            *://*/*index.php?threads/*
+// @match            *://*/*
+// @exclude          *://*.google.com/*
+// @exclude          *://*.youtube.com/*
+// @exclude          *://*.facebook.com/*
+// @exclude          *://*.messenger.com/*
+// @exclude          *://*.instagram.com/*
+// @exclude          *://*.twitter.com/*
+// @exclude          *://*.x.com/*
+// @exclude          *://*.tiktok.com/*
+// @exclude          *://*.reddit.com/*
+// @exclude          *://*.linkedin.com/*
+// @exclude          *://*.whatsapp.com/*
+// @exclude          *://*.zalo.me/*
+// @exclude          *://*.github.com/*
+// @exclude          *://*.wikipedia.org/*
+// @exclude          *://*.amazon.com/*
+// @exclude          *://*.netflix.com/*
+// @exclude          *://*.microsoft.com/*
+// @exclude          *://*.live.com/*
+// @exclude          *://*.office.com/*
+// @exclude          *://*.apple.com/*
+// @exclude          *://*.icloud.com/*
+// @exclude          *://*.paypal.com/*
+// @exclude          *://*.shopee.vn/*
+// @exclude          *://*.lazada.vn/*
+// @exclude          *://*.tiki.vn/*
+// @exclude          *://*.chatgpt.com/*
+// @exclude          *://*.openai.com/*
+// @exclude          *://*.claude.ai/*
 // @grant            GM_xmlhttpRequest
 // @grant            GM.xmlHttpRequest
 // @grant            GM_registerMenuCommand
@@ -27,12 +54,23 @@
   'use strict';
 
   // ---------------------------------------------------------------------------
-  // Only run on XenForo (1.x or 2.x) thread pages
+  // Only run on XenForo (1.x or 2.x) thread pages. The script is allowed on every site because forums
+  // can rename the "threads/" part of their URLs, so pages are recognised by their markup instead.
+  // On any other page it stops here: nothing is added to the page and no request is made.
   // ---------------------------------------------------------------------------
   const docEl = document.documentElement;
-  const isXenForo = docEl.id === 'XF' || docEl.id === 'XenForo' || docEl.hasAttribute('data-xf') ||
-    !!document.querySelector('.bbWrapper, .messageText');
-  if (!isXenForo || !document.querySelector('article.message, li.message')) return;
+  function isThreadPage() {
+    const hasPosts = () => !!document.querySelector('article.message .bbWrapper, li.message .messageText');
+    if (docEl.id === 'XF' || docEl.hasAttribute('data-xf')) {
+      // XF 2.x names the page template: thread_view, thread_view_type_article / _question / _suggestion…
+      const tpl = docEl.getAttribute('data-template');
+      return tpl ? tpl.startsWith('thread_view') : hasPosts();
+    }
+    if (docEl.id === 'XenForo') return !!document.querySelector('#content.thread_view') || hasPosts();
+    // themes that drop the html markers: the post markup itself is XenForo-specific
+    return !!document.querySelector('article.message--post .bbWrapper');
+  }
+  if (!isThreadPage()) return;
 
   // ---------------------------------------------------------------------------
   // Config
@@ -331,7 +369,14 @@
   const HOUR = 3600e3, DAY = 24 * HOUR;
   const CACHE_SCHEMA = 2; // bump when the shape of cached pages changes
   const PAGE_TTL = 12 * HOUR, LINK_TTL = 7 * DAY, DEAD_LINK_TTL = DAY, THUMB_TTL = 7 * DAY, MAX_THREADS = 30;
-  const THREAD_ID = (location.href.match(/threads\/(?:[^/?#]*\.)?(\d+)/) || [])[1] || location.pathname;
+  // Thread id, whatever the URL scheme: XF's content key, else the last ".123/" or "/123/" in the canonical URL
+  const THREAD_ID = (() => {
+    const key = (docEl.getAttribute('data-content-key') || '').match(/^thread-(\d+)$/);
+    if (key) return key[1];
+    const canon = (document.querySelector('link[rel="canonical"]') || {}).href || location.href.split('#')[0];
+    const ids = [...canon.matchAll(/[./](\d+)(?=\/|$)/g)];
+    return ids.length ? ids[ids.length - 1][1] : location.pathname;
+  })();
 
   const cache = (() => {
     let dbPromise = null;
