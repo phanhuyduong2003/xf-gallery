@@ -19,10 +19,13 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 - Loading modes in *Options → Loading pages*: **Saver** (only the page you are reading, the next one when you get there), **Balanced** (default: 2 pages on each side, following you as you browse) and **Whole thread** (asks first above 50 pages).
 - Pages not loaded yet show as a "p. 4–8 · not loaded" block in the filmstrip and the grid; clicking it loads the nearest page and jumps there. Next / previous, first / last and autoplay load the pages they need, then move. Grid and Scroll load the next page when you scroll to the end.
 - A banner explains why loading is paused (captcha, "slow down", 40-page limit) with **Continue** / **Open the thread** buttons.
+- Faster videos: the next video is prepared in the background and played at once when you get there; each host's speed is remembered and slow hosts start with the lighter version; if the full-quality file shows nothing after 1.5 s the lighter one races it; short clips (up to 30 MB) on slow hosts download in 3 parallel parts; the connection to the next item's host is opened early. A host answering 403 / 429 / 503 gets none of this for 30 minutes, and the forum's own files never do.
+- **Auto / HD / SD** button in the video bar (remembered, keeps the playback position).
 
 ### Changed
 - **The gallery no longer downloads the whole thread by default.** Page requests are paced to look like a person browsing, to avoid captchas and account bans: one at a time per forum across all tabs, about 5 s apart (longer when the forum is slow), at most 40 per 10 minutes, nothing while the tab is hidden or the gallery closed. A captcha / security check or 403 / 503 stops loading in every tab with no retry; 429 waits as long as the forum asks, longer each time, and stops on the third.
 - Cached thread pages are kept 7 days (the last 3 pages 1 hour) instead of 12 hours, so moving between pages costs fewer requests.
+- Video thumbnails without a poster load one at a time, only after the watched video shows a frame, and use the lighter version. Leaving a video stops its download.
 
 ### Fixed
 -

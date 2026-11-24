@@ -67,7 +67,8 @@ Trong modal có 3 kiểu xem:
   - Thanh công cụ hiện số thứ tự kèm một dòng nhỏ bên dưới (trang, mục hỏng, tiến độ tải). Cửa sổ hẹp hơn khoảng 960 px và điện thoại dùng 2 hàng: số thứ tự, nút lọc và nút đóng ở trên, các công cụ có tên ở dưới.
   - Ảnh thu nhỏ chỉ tải khi hiện trên màn hình, tối đa 4 ảnh cùng lúc, nên ảnh bạn mở không phải chờ sau chúng. Trong lúc ảnh lớn đang tải, ảnh thu nhỏ (nếu đã có) hiện mờ kèm vòng xoay; sau đó ảnh kế trước / kế sau được tải trước lần lượt từng ảnh. Ảnh lớn đã tải xong cũng được dùng luôn cho ô thu nhỏ của nó, không tốn thêm yêu cầu.
   - **Cỡ ảnh:** với Imgur và các dịch vụ Chevereto (anh.moe, ibb.co…), dải ảnh dùng bản nhỏ và chế độ Lưới dùng bản vừa của dịch vụ. Nếu sau 0,8 giây ảnh gốc vẫn đang tải, bản vừa được hiện tạm (ảnh gốc tải nhanh thì không gọi bản vừa). Dịch vụ khác chỉ có một file nên vẫn dùng cách hiện ảnh thu nhỏ mờ.
-  - **Chất lượng video:** Streamable và RedGifs có bản nhẹ hơn. Bản này được dùng khi mạng chậm (3G trở xuống) hoặc bật tiết kiệm dữ liệu, và cho ảnh thu nhỏ; còn lại phát bản chất lượng đầy đủ. Chất lượng được chọn trước khi phát, không đổi giữa chừng. Nếu video trực tiếp không phát được thì chuyển sang trình phát nhúng của dịch vụ.
+  - **Chất lượng video:** Streamable và RedGifs có bản nhẹ hơn. Bản này được dùng khi mạng chậm (3G trở xuống) hoặc bật tiết kiệm dữ liệu, với host script đã đo được là chậm, và cho ảnh thu nhỏ; còn lại phát bản chất lượng đầy đủ. Nút **Auto / HD / SD** trên thanh điều khiển video cho phép tự chọn (được ghi nhớ), giữ nguyên vị trí đang phát. Nếu video trực tiếp không phát được thì chuyển sang trình phát nhúng của dịch vụ.
+  - **Video nhanh hơn:** xem [Tải video](#tải-video).
   - **Máy chủ chậm:** ảnh hoặc video sau 5 giây vẫn chưa tải xong thì hiện thông báo máy chủ phản hồi chậm, kèm nút **Thử lại** và **Mở link gốc**. Yêu cầu tải trang chủ đề được huỷ sau 20 giây và thử lại tối đa 3 lần; trang vẫn lỗi thì được tính là lỗi và các trang sau vẫn tải tiếp. Ảnh thu nhỏ tải chậm nhường chỗ trong hàng đợi cho ảnh kế tiếp sau 10 giây (vẫn tiếp tục tải ngầm).
   - Mục mở đầu được chọn khi trang đang đọc xử lý xong (tối đa khoảng 1,5 giây), nên không bị nhảy khi một link ở đầu trang xử lý xong muộn.
   - Phóng to: bấm chuột trái vào ảnh (bấm lần nữa để thu lại), lăn chuột, hoặc chụm hai ngón. Khi đang phóng to thì kéo để di chuyển. Chuột phải vẫn mở menu bình thường (lưu ảnh, sao chép…), không phóng to.
@@ -131,6 +132,20 @@ Mỗi trang script tải là một yêu cầu gửi tới diễn đàn. Tải li
 - Trang đã có thì không bao giờ tải lại (xem bộ nhớ đệm bên dưới), và trang đang đọc không tốn yêu cầu nào.
 
 Dòng trạng thái dưới bộ đếm cho biết script đang làm gì: số trang đã tải ("12/500 trang"), "đang chờ (giãn cách yêu cầu)", "đang tải trang 9", "đã dừng".
+
+### Tải video
+
+Host video (Streamable, RedGifs…) không phải diễn đàn: yêu cầu tới đó không tính vào diễn đàn và không thể làm tài khoản diễn đàn bị khoá. Host lớn phát video qua CDN được thiết kế cho lượng truy cập rất lớn. Script vẫn giữ vài giới hạn để không dồn tải vào host nhỏ và để IP của bạn không bị host chặn.
+
+- **Nhớ tốc độ từng host:** thời gian tới khung hình đầu của mỗi host video được ghi nhớ. Host chậm (trên 3 giây) sẽ bắt đầu bằng bản nhẹ.
+- **Đua tới khung hình đầu:** nếu bản chất lượng đầy đủ sau 1,5 giây vẫn chưa có hình, bản nhẹ được tải song song; bản nào lên hình trước thì giữ, bản kia bị huỷ. Host thua cuộc đua được ghi nhớ là chậm.
+- **Chuẩn bị sẵn video kế tiếp:** khi mục hiện tại đã hiện, video kế tiếp bắt đầu tải ngầm và được đưa lên màn hình khi bạn tới, nên phát gần như ngay. Chỉ một video, chỉ phần đầu, huỷ khi bạn chuyển đi chỗ khác, không chạy khi bật tiết kiệm dữ liệu.
+- **Tải song song clip ngắn ở host chậm:** clip tới 30 MB trên host đã biết là chậm được tải thành 3 phần cùng lúc (có ích khi host giới hạn tốc độ từng kết nối), rồi mới phát.
+- **Ưu tiên video đang xem:** ảnh bìa dạng video (khi không có ảnh bìa sẵn) tải từng cái một, chỉ sau khi video đang xem đã lên hình. Rời một video thì video đó ngừng tải.
+- **Mở kết nối sớm:** kết nối tới host của mục kế tiếp (video và trình phát nhúng) được mở trước.
+- **Giới hạn:** host trả lỗi 403 / 429 / 503 sẽ không bị đua hay tải song song trong 30 phút, chỉ phát bình thường. Video tải thẳng lên diễn đàn (tệp đính kèm, proxy của diễn đàn) không bao giờ được chuẩn bị trước, đua hay tải song song.
+
+Trình phát nhúng (YouTube, Vimeo, TikTok) phát trong trình phát của chính dịch vụ, nên script không thể tăng tốc bản thân video, chỉ mở kết nối sớm.
 
 ### Bộ nhớ đệm và chuyển trang
 

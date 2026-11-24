@@ -67,7 +67,8 @@ The modal has 3 views:
   - The toolbar shows the counter with a small line below it (page, broken items, loading progress). Windows narrower than about 960 px and phones use two rows: counter, filter and close on top, the labelled tools below.
   - Thumbnails load only when visible, at most 4 at a time, so the item you open is not stuck behind them. While a full image loads, its thumbnail (if already loaded) is shown blurred with a spinner; the next and previous images are then preloaded one at a time. A loaded full image also fills its filmstrip thumbnail at no extra cost.
   - **Image sizes:** for Imgur and Chevereto hosts (anh.moe, ibb.co…) the filmstrip uses the host's small version and the grid its medium version. If a full image is still loading after 0.8 s, the medium version is shown meanwhile (it is not requested when the full image is quick). Other hosts offer a single file, so they keep the blurred-thumbnail approach.
-  - **Video quality:** Streamable and RedGifs offer a lighter version. It is used on slow connections (3G or slower) or with data saver on, and for thumbnails; otherwise the full-quality version plays. The quality is chosen before playback and never switched mid-way. If the direct video will not play, the host's embedded player is used instead.
+  - **Video quality:** Streamable and RedGifs offer a lighter version. It is used on slow connections (3G or slower) or with data saver on, on hosts the script has measured as slow, and for thumbnails; otherwise the full-quality version plays. The **Auto / HD / SD** button in the video bar overrides this (remembered), keeping the playback position. If the direct video will not play, the host's embedded player is used instead.
+  - **Faster videos:** see [Video loading](#video-loading).
   - **Slow servers:** if an image or video is still loading after 5 seconds, a notice says the server is responding slowly, with **Retry** and **Open original link**. Thread page requests give up after 20 seconds and are retried up to 3 times; a page that still fails is counted as an error and the next pages load anyway. A slow thumbnail gives its place in the queue to the next one after 10 seconds (it keeps loading in the background).
   - The opening item is chosen once the page you are reading has been processed (at most about 1.5 s), so it does not jump when a link near the top of the page resolves late.
   - Zoom: left-click the image (click again to zoom out), use the mouse wheel, or pinch. Drag to pan while zoomed. Right-click still opens the normal context menu (save image, copy…) and does not zoom.
@@ -133,6 +134,20 @@ Every page the script loads is a request to the forum. Loading hundreds of pages
 - Pages you already have are never requested again (see the cache below), and the page you are reading costs no request at all.
 
 The status line below the counter says what is happening: pages loaded ("12/500 pages"), "waiting (spacing requests)", "loading page 9", "paused".
+
+### Video loading
+
+Video hosts (Streamable, RedGifs…) are not the forum: requests to them never count against the forum and cannot get your forum account banned. Big hosts serve video through CDNs built for heavy traffic. The script still keeps a few limits, so small hosts are not flooded and your IP is not blocked by a host.
+
+- **Host speed memory:** for each video host, the time to the first frame is remembered. Hosts that are slow (over 3 s) start with the lighter version.
+- **Race to the first frame:** if the full-quality file shows nothing after 1.5 s, the lighter version starts alongside it; whichever shows a frame first is kept and the other is cancelled. A host that loses the race is remembered as slow.
+- **Next video prepared:** once the current item shows, the next video starts buffering in the background and is moved onto the screen when you get there, so it plays almost at once. Only one video, only its beginning, cancelled when you go elsewhere, not with data saver on.
+- **Parallel download for short clips on slow hosts:** clips up to 30 MB on a host known to be slow are downloaded in 3 parts at once (helps when the host limits each connection), then played.
+- **Watched video first:** video thumbnails without a poster load one at a time, only after the video you are watching shows a frame. Leaving a video stops its download.
+- **Connection opened early:** the connection to the next item's host (videos and embedded players) is opened in advance.
+- **Limits:** a host answering 403 / 429 / 503 gets no races or parallel downloads for 30 minutes, only normal playback. Videos uploaded to the forum itself (attachments, the forum's proxy) are never prepared ahead, raced or downloaded in parts.
+
+Embedded players (YouTube, Vimeo, TikTok) play inside the host's own player, so the script cannot speed up the video itself, only open the connection early.
 
 ### Cache and moving between pages
 
