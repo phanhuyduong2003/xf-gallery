@@ -16,13 +16,17 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
--
+- Pin the image info (**P**, or the pin button on the info): it stays shown on every image, compact and next to the picture (below it, on its right for tall pictures, or with the picture shrunk a little), so it never covers it. Hovering expands it. The choice is remembered.
+- The next page is requested when 3 items are left before the end of what is loaded, so the gallery does not stop at the last item to wait for it (also in Saver mode; not in browse mode, where pages can only be opened by going there).
 
 ### Changed
--
+- Videos always play while they download, like opening their link: short clips on hosts marked slow are no longer downloaded whole before playing.
+- The video being watched gets the connection first: the next video, video thumbnails and image preloads wait until 10 s of it are downloaded (at most 10 s). Grabbing a frame for a video thumbnail no longer buffers the start of the file.
 
 ### Fixed
--
+- Image info disappeared on every move to the next image until the mouse moved again; it now shows at once when the mouse is over the new image.
+- The viewer could show the small preview from the post (an attachment thumbnail, for example) instead of the original, once the filmstrip had loaded that preview. Previews remembered by 3.1.0 are ignored.
+- A video host marked slow once stayed slow for good; its speed is now measured on every video again.
 
 ## [3.1.0] - 2026-11-25
 

@@ -166,7 +166,15 @@
 .xtg-show .xtg-reel-img{background:linear-gradient(transparent,rgba(0,0,0,.14) 40%,rgba(0,0,0,.4))}
 .xtg-reel-img .xtg-reel-info{opacity:0}
 .xtg-show .xtg-reel-img .xtg-reel-info{opacity:1}
-.xtg-stage:not(.xtg-show) .xtg-reel-img:not(.xtg-touchinfo) *{pointer-events:none}
+.xtg-stage:not(.xtg-show):not(.xtg-pinned) .xtg-reel-img:not(.xtg-touchinfo) *{pointer-events:none}
+/* pinned image info: always shown, compact and outside the picture until hovered */
+.xtg-pinned .xtg-reel-img .xtg-reel-info{opacity:1}
+.xtg-reel-img.xtg-reel-out.xtg-compact{background:transparent;padding-top:6px}
+.xtg-reel-img .xtg-reel-info{position:relative}
+.xtg-reel-img .xtg-who{padding-right:32px}
+.xtg-pin{position:absolute;right:0;top:0;width:26px;height:26px;padding:0;border:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);color:#fff;opacity:.8;cursor:pointer}
+.xtg-pin:hover{opacity:1;background:rgba(0,0,0,.6)}
+.xtg-pin.on{opacity:1;background:#1f6feb}
 .xtg-reel-img.xtg-touchinfo{pointer-events:auto;padding-top:28px;background:linear-gradient(transparent,rgba(0,0,0,.18) 35%,rgba(0,0,0,.5))}
 .xtg-reel-img.xtg-touchinfo .xtg-reel-info{opacity:1}
 .xtg-compact .xtg-av{width:26px;height:26px;border-width:1.5px}

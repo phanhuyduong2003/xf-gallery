@@ -24,6 +24,10 @@
     }
     return item.memo;
   }
+  // The picture shown in the post (often a small preview of the original) is also kept among the candidates, as a
+  // last resort when the original is gone. A thumbnail that loads it must not count as "the file that works",
+  // or the viewer would show the small preview instead of the original.
+  const isPreview = (item, u) => !!item.thumb && !!u && directUrl(u) === directUrl(item.thumb);
   function rememberOk(item, url) {
     if (!item.key || item.savedOk === url || (!item.savedOk && url === item.candidates[0])) return; // nothing to learn
     item.savedOk = url;
@@ -116,8 +120,8 @@
       if (isPlaceholder(img)) { tryNext(); return; }
       if (img._xtgFrom && img.src.startsWith('blob:')) {
         if (failedDirect.has(hostOf(img._xtgFrom))) learnManagerHost(img._xtgFrom); // failed directly, fine through the manager
-        if (item.candidates.includes(img._xtgFrom)) item.working = img.src;
-      } else if (item.candidates.includes(img.src)) {
+        if (item.candidates.includes(img._xtgFrom) && !isPreview(item, img._xtgFrom)) item.working = img.src;
+      } else if (item.candidates.includes(img.src) && !isPreview(item, img.src)) {
         if (!item.working) item.working = img.src;
         rememberOk(item, img.src);
       } else if (img.src === item.large) item.fitted = img.src;
@@ -125,7 +129,7 @@
     };
     mediaMemo(item).then((m) => {
       if (m && m.dead) { onFail(); return; }
-      if (m && m.ok && item.candidates.includes(m.ok)) {
+      if (m && m.ok && item.candidates.includes(m.ok) && !isPreview(item, m.ok)) { // (3.1.0 may have saved a preview)
         const at = urls.findIndex((u) => item.candidates.includes(u));
         if (at >= 0) urls = uniq([...urls.slice(0, at), m.ok, ...urls.slice(at)]);
       }

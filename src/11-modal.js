@@ -119,6 +119,7 @@
         case 'hosts': ui.menu.hidden = true; editHosts(); break;
         case 'reload': reloadThread(); break;
         case 'retry': renderStage(); break;
+        case 'pin': togglePin(); break;
         case 'netcontinue': netContinue(); break;
         case 'loadall': S.allConfirmed = true; ensureWindow(); scheduleStatus(); break;
         case 'later': S.allDismissed = true; scheduleStatus(); break;
@@ -216,6 +217,7 @@
       setInfo(kind, !S[kind]);
       return;
     }
+    if (k === 'p') { togglePin(); return; } // keeps the image info shown, outside the picture
     if (k === 'g') { setView(S.view === 'grid' ? 'viewer' : 'grid'); return; }
     if (k === 'Home' || k === 'End') { jumpToEdge(k === 'Home' ? -1 : 1); e.preventDefault(); return; }
     if (S.view !== 'viewer') return;

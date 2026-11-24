@@ -16,13 +16,17 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
--
+- Ghim thông tin ảnh (phím **P**, hoặc nút ghim trên phần thông tin): thông tin luôn hiện ở mọi ảnh, ở dạng gọn và nằm cạnh ảnh (bên dưới, bên phải với ảnh dọc, hoặc thu nhỏ ảnh một chút) nên không bao giờ che ảnh. Di chuột vào thì mở rộng. Lựa chọn được ghi nhớ.
+- Trang kế được tải khi còn 3 item nữa là hết phần đã tải, nên album không còn dừng ở item cuối để chờ (cả ở chế độ Saver; trừ chế độ duyệt, nơi chỉ mở được trang bằng cách đi tới nó).
 
 ### Thay đổi
--
+- Video luôn phát trong lúc tải, như khi mở link gốc: clip ngắn trên host bị coi là chậm không còn bị tải hết rồi mới phát.
+- Video đang xem được ưu tiên đường truyền: video kế tiếp, ảnh thu nhỏ của video và ảnh tải trước chờ tới khi video đang xem tải trước được 10 giây (tối đa 10 giây). Việc chụp khung hình làm ảnh thu nhỏ cho video không còn tải phần đầu của file.
 
 ### Sửa lỗi
--
+- Thông tin ảnh tự ẩn mỗi lần chuyển sang ảnh tiếp theo cho tới khi di chuột lại; nay hiện ngay nếu chuột đang nằm trên ảnh mới.
+- Phần xem chi tiết có thể hiện ảnh xem trước nhỏ trong bài (ví dụ ảnh thu nhỏ của tệp đính kèm) thay cho ảnh gốc, sau khi cuộn ảnh đã tải ảnh xem trước đó. Các ảnh xem trước bị bản 3.1.0 ghi nhớ nhầm được bỏ qua.
+- Host video một lần bị coi là chậm thì bị coi là chậm mãi; nay tốc độ được đo lại sau mỗi video.
 
 ## [3.1.0] - 2026-11-25
 

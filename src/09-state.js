@@ -12,6 +12,7 @@
     showDead: false,
     infoVideos: store.get('infoVideos', store.get('showLabel', true)),
     infoImages: store.get('infoImages', true),
+    pinInfo: store.get('pinInfo', false),   // image info stays shown (compact, outside the image) until unpinned
     muted: store.get('muted', false),
     vquality: store.get('vquality', 'auto'), // auto | hd | sd
     threadStarter: null,
@@ -24,6 +25,7 @@
     unwireVideo: null,
     renderId: 0,             // bumped on every render of the viewer
     curReady: false,         // the current item has loaded
+    curBuffered: false,      // ... and, for a video, buffered enough that background loads may start
     slowTimer: null,
     stripTouched: 0,         // last time the user scrolled the filmstrip by hand
     filter: store.get('filter', 'all'), // all | image | video (video includes embedded players)

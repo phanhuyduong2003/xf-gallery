@@ -97,6 +97,7 @@ Kiểu xem được ghi nhớ cho lần sau. Các nút khác:
   - Nội dung đã bỏ phần trích dẫn, link trần và chữ của link ảnh/video.
   - Khi ảnh hoặc video còn đang tải, thông tin và nhãn được ẩn (chỉ hiện vòng xoay) để không vướng thao tác.
   - Phím **I** bật/tắt thông tin của loại đang xem (ảnh hoặc video). Khi đang phóng to ảnh, nhãn và thông tin tự ẩn.
+  - Thông tin ảnh hiện khi di chuột vào ảnh, và vẫn hiện ở ảnh tiếp theo nếu chuột chưa rời đi. Phím **P** (hoặc nút ghim trên phần thông tin) giữ thông tin luôn hiện ở mọi ảnh: khi đó thông tin nằm cạnh ảnh (bên dưới, hoặc bên phải với ảnh dọc, thu nhỏ ảnh một chút nếu không đủ chỗ) nên không bao giờ che ảnh; di chuột vào để đọc đầy đủ.
   - Ở chế độ Cuộn, thông tin hiện thành thẻ phía trên mục; ở chế độ Lưới, tên người đăng hiện ở góc ô video.
   - Tác giả chủ đề được lấy từ dòng thông tin đầu chủ đề, hoặc từ người viết bài đầu tiên của trang 1.
 - **Tuỳ chọn** (biểu tượng hai thanh trượt):

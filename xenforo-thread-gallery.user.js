@@ -180,6 +180,7 @@
       options: 'Options', close: 'Close (Esc)', prev: 'Previous (←)', next: 'Next (→)', first: 'First (Home)', last: 'Last (End)',
       optInfoVideos: 'Show info on videos (I)',
       optInfoImages: 'Show info on images (I)',
+      pinTip: 'Keep the info shown, outside the image (P)', unpinTip: 'Show the info only under the mouse (P)',
       fullPost: 'Whole post',
       inPost: (i, n) => `${i} of ${n} in this post`,
       optDead: 'Show broken items in grid / scroll',
@@ -246,6 +247,7 @@
       options: 'Tuỳ chọn', close: 'Đóng (Esc)', prev: 'Trước (←)', next: 'Sau (→)', first: 'Đầu tiên (Home)', last: 'Cuối cùng (End)',
       optInfoVideos: 'Hiện thông tin trên video (phím I)',
       optInfoImages: 'Hiện thông tin trên ảnh (phím I)',
+      pinTip: 'Ghim thông tin, đặt ra ngoài ảnh (phím P)', unpinTip: 'Chỉ hiện thông tin khi di chuột vào (phím P)',
       fullPost: 'Xem cả bài',
       inPost: (i, n) => `${i}/${n} trong bài`,
       optDead: 'Hiện mục hỏng ở chế độ lưới / cuộn',
@@ -327,6 +329,7 @@
   const el = (tag, props) => Object.assign(document.createElement(tag), props);
 
   const ICONS = {
+    pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
     play: '<polygon points="6 3 20 12 6 21 6 3"/>',
     pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
     post: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
@@ -1317,6 +1320,7 @@
     showDead: false,
     infoVideos: store.get('infoVideos', store.get('showLabel', true)),
     infoImages: store.get('infoImages', true),
+    pinInfo: store.get('pinInfo', false),   // image info stays shown (compact, outside the image) until unpinned
     muted: store.get('muted', false),
     vquality: store.get('vquality', 'auto'), // auto | hd | sd
     threadStarter: null,
@@ -1329,6 +1333,7 @@
     unwireVideo: null,
     renderId: 0,             // bumped on every render of the viewer
     curReady: false,         // the current item has loaded
+    curBuffered: false,      // ... and, for a video, buffered enough that background loads may start
     slowTimer: null,
     stripTouched: 0,         // last time the user scrolled the filmstrip by hand
     filter: store.get('filter', 'all'), // all | image | video (video includes embedded players)
@@ -1526,7 +1531,15 @@
 .xtg-show .xtg-reel-img{background:linear-gradient(transparent,rgba(0,0,0,.14) 40%,rgba(0,0,0,.4))}
 .xtg-reel-img .xtg-reel-info{opacity:0}
 .xtg-show .xtg-reel-img .xtg-reel-info{opacity:1}
-.xtg-stage:not(.xtg-show) .xtg-reel-img:not(.xtg-touchinfo) *{pointer-events:none}
+.xtg-stage:not(.xtg-show):not(.xtg-pinned) .xtg-reel-img:not(.xtg-touchinfo) *{pointer-events:none}
+/* pinned image info: always shown, compact and outside the picture until hovered */
+.xtg-pinned .xtg-reel-img .xtg-reel-info{opacity:1}
+.xtg-reel-img.xtg-reel-out.xtg-compact{background:transparent;padding-top:6px}
+.xtg-reel-img .xtg-reel-info{position:relative}
+.xtg-reel-img .xtg-who{padding-right:32px}
+.xtg-pin{position:absolute;right:0;top:0;width:26px;height:26px;padding:0;border:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);color:#fff;opacity:.8;cursor:pointer}
+.xtg-pin:hover{opacity:1;background:rgba(0,0,0,.6)}
+.xtg-pin.on{opacity:1;background:#1f6feb}
 .xtg-reel-img.xtg-touchinfo{pointer-events:auto;padding-top:28px;background:linear-gradient(transparent,rgba(0,0,0,.18) 35%,rgba(0,0,0,.5))}
 .xtg-reel-img.xtg-touchinfo .xtg-reel-info{opacity:1}
 .xtg-compact .xtg-av{width:26px;height:26px;border-width:1.5px}
@@ -1737,6 +1750,7 @@ a.xtg-name:hover{text-decoration:underline}
         case 'hosts': ui.menu.hidden = true; editHosts(); break;
         case 'reload': reloadThread(); break;
         case 'retry': renderStage(); break;
+        case 'pin': togglePin(); break;
         case 'netcontinue': netContinue(); break;
         case 'loadall': S.allConfirmed = true; ensureWindow(); scheduleStatus(); break;
         case 'later': S.allDismissed = true; scheduleStatus(); break;
@@ -1834,6 +1848,7 @@ a.xtg-name:hover{text-decoration:underline}
       setInfo(kind, !S[kind]);
       return;
     }
+    if (k === 'p') { togglePin(); return; } // keeps the image info shown, outside the picture
     if (k === 'g') { setView(S.view === 'grid' ? 'viewer' : 'grid'); return; }
     if (k === 'Home' || k === 'End') { jumpToEdge(k === 'Home' ? -1 : 1); e.preventDefault(); return; }
     if (S.view !== 'viewer') return;
@@ -2156,6 +2171,10 @@ a.xtg-name:hover{text-decoration:underline}
     }
     return item.memo;
   }
+  // The picture shown in the post (often a small preview of the original) is also kept among the candidates, as a
+  // last resort when the original is gone. A thumbnail that loads it must not count as "the file that works",
+  // or the viewer would show the small preview instead of the original.
+  const isPreview = (item, u) => !!item.thumb && !!u && directUrl(u) === directUrl(item.thumb);
   function rememberOk(item, url) {
     if (!item.key || item.savedOk === url || (!item.savedOk && url === item.candidates[0])) return; // nothing to learn
     item.savedOk = url;
@@ -2248,8 +2267,8 @@ a.xtg-name:hover{text-decoration:underline}
       if (isPlaceholder(img)) { tryNext(); return; }
       if (img._xtgFrom && img.src.startsWith('blob:')) {
         if (failedDirect.has(hostOf(img._xtgFrom))) learnManagerHost(img._xtgFrom); // failed directly, fine through the manager
-        if (item.candidates.includes(img._xtgFrom)) item.working = img.src;
-      } else if (item.candidates.includes(img.src)) {
+        if (item.candidates.includes(img._xtgFrom) && !isPreview(item, img._xtgFrom)) item.working = img.src;
+      } else if (item.candidates.includes(img.src) && !isPreview(item, img.src)) {
         if (!item.working) item.working = img.src;
         rememberOk(item, img.src);
       } else if (img.src === item.large) item.fitted = img.src;
@@ -2257,7 +2276,7 @@ a.xtg-name:hover{text-decoration:underline}
     };
     mediaMemo(item).then((m) => {
       if (m && m.dead) { onFail(); return; }
-      if (m && m.ok && item.candidates.includes(m.ok)) {
+      if (m && m.ok && item.candidates.includes(m.ok) && !isPreview(item, m.ok)) { // (3.1.0 may have saved a preview)
         const at = urls.findIndex((u) => item.candidates.includes(u));
         if (at >= 0) urls = uniq([...urls.slice(0, at), m.ok, ...urls.slice(at)]);
       }
@@ -2351,14 +2370,14 @@ a.xtg-name:hover{text-decoration:underline}
   //     and whichever shows a frame first is kept (the other is cancelled);
   //   - the next video is prepared in a hidden element (the browser buffers its start) and moved onto the
   //     stage when you get there; not on data saver, never for the forum's files;
-  //   - short clips on hosts known to be slow are downloaded in VIDEO_PARTS parallel ranges;
-  //   - a host answering 403 / 429 / 503 gets a VIDEO_TRIP_MS break from races and parallel downloads.
+  //   - the video being watched always plays as it downloads, like opening its link, and has the connection to
+  //     itself until it is VIDEO_AHEAD_S ahead (see curBuffered): the next video, video thumbnails and image
+  //     preloads wait until then instead of taking bandwidth from it.
   // ---------------------------------------------------------------------------
   const VIDEO_SLOW_MS = 3000;                 // slower than this to the first frame: the host counts as slow
   const VIDEO_RACE_MS = 1500;                 // head start of the chosen file before the lighter one may race it
-  const VIDEO_PARTS = 3;                      // parallel ranges for short clips on slow hosts
-  const VIDEO_PARTS_MAX = 30 * 1024 * 1024;   // ... only for files up to this size (they play once complete)
-  const VIDEO_TRIP_MS = 30 * 60e3;
+  const VIDEO_AHEAD_S = 10;                   // background loads wait until this much is downloaded ahead...
+  const VIDEO_BUFFER_MS = 10000;              // ... or at most this long after the first frame
   const VIDEO_HOSTS_MAX = 60;
 
   const vhosts = {
@@ -2376,14 +2395,10 @@ a.xtg-name:hover{text-decoration:underline}
     return !x || x.protocol === 'blob:' || bareHost(x.hostname) === bareHost(location.hostname) || /\/proxy\.php$/.test(x.pathname);
   };
   const hostSlow = (u) => (vhosts.get(hostOf(u)).ttff || 0) > VIDEO_SLOW_MS;
-  const hostTripped = (u) => (vhosts.get(hostOf(u)).trip || 0) > Date.now();
   function recordTtff(u, ms) {
     if (!u || isForumUrl(u)) return;
     const h = hostOf(u), old = vhosts.get(h).ttff;
     vhosts.set(h, { ttff: Math.round(old ? old * 0.6 + ms * 0.4 : ms) }); // moving average, recent visits weigh more
-  }
-  function tripHost(u, status) {
-    if ([403, 429, 503].includes(status)) vhosts.set(hostOf(u), { trip: Date.now() + VIDEO_TRIP_MS });
   }
 
   // Order of the files to try: the user's choice (HD / SD), else the lighter one first on a slow connection
@@ -2395,7 +2410,7 @@ a.xtg-name:hover{text-decoration:underline}
       const sdFirst = S.vquality === 'sd' || (S.vquality === 'auto' && (slowNet() || hostSlow(c[0])));
       list = sdFirst ? uniq([item.sd, ...c]) : uniq([...c.filter((u) => u !== item.sd), item.sd]);
     }
-    return item.blob ? uniq([item.blob, ...list]) : item.playUrl ? uniq([item.playUrl, ...list]) : list;
+    return item.playUrl ? uniq([item.playUrl, ...list]) : list;
   }
 
   const killVideo = (v) => {
@@ -2419,10 +2434,16 @@ a.xtg-name:hover{text-decoration:underline}
     tryNext();
   }
 
-  // Video thumbnails without a poster load one at a time, and only once the video being watched shows a frame
+  // Video thumbnails without a poster load one at a time, and only once the video being watched has buffered
+  // enough (also while the opening item is not picked yet, which takes up to 1.5 s)
   const thumbVideoQueue = makeQueue(1);
-  // (also while the opening item is not picked yet, which takes up to 1.5 s)
-  const mainVideoBusy = () => ui && !ui.root.hidden && S.view === 'viewer' && (!S.cur ? S.items.length > 0 : S.cur.type === 'video' && !S.curReady);
+  const mainVideoBusy = () => ui && !ui.root.hidden && S.view === 'viewer' && (!S.cur ? S.items.length > 0 : S.cur.type === 'video' && !S.curBuffered);
+  // Run fn once the video being watched has buffered enough (at once for anything else), unless the user moved on
+  function afterBuffered(rid, fn) {
+    if (rid !== S.renderId) return;
+    if (S.cur && S.cur.type === 'video' && !S.curBuffered) { setTimeout(() => afterBuffered(rid, fn), 300); return; }
+    fn();
+  }
   function thumbVideo(v, item, onFail) {
     thumbVideoQueue(async () => {
       while (mainVideoBusy()) await sleep(300);
@@ -2464,7 +2485,7 @@ a.xtg-name:hover{text-decoration:underline}
     if (next) preconnect(next.type === 'embed' ? next.url : next.candidates[0]);
     if (PREP.item === next && PREP.v) return;
     dropPrepared();
-    if (!next || next.type !== 'video' || next.blob) return;
+    if (!next || next.type !== 'video') return;
     const urls = videoUrls(next);
     if (isForumUrl(urls[0])) return; // the forum's own files are never fetched ahead
     const v = mediaEl('video', { muted: true, preload: 'auto' });
@@ -2476,35 +2497,8 @@ a.xtg-name:hover{text-decoration:underline}
     loadVideo(v, next, () => { if (PREP.v === v) dropPrepared(); }, '', urls);
   }
 
-  // Short clip on a slow host: VIDEO_PARTS ranges at once, then one blob: URL. Throws to fall back to normal playback.
-  const headerOf = (raw, name) => { const m = (raw || '').match(new RegExp('^' + name + ':\\s*(.+)$', 'im')); return m ? m[1].trim() : ''; };
-  const blobItems = []; // items holding a downloaded clip, oldest first (at most 3 kept in memory)
-  async function downloadParts(item, url) {
-    const probe = await gmGet(url, true, { Range: 'bytes=0-0' }, 10000);
-    if (probe.status !== 206) { tripHost(url, probe.status); throw new Error('no ranges'); }
-    const total = +(headerOf(probe.headers, 'content-range').split('/')[1] || 0);
-    if (!total || total > VIDEO_PARTS_MAX) throw new Error('too big');
-    const type = (headerOf(probe.headers, 'content-type') || 'video/mp4').split(';')[0];
-    const size = Math.ceil(total / VIDEO_PARTS);
-    const parts = await Promise.all([...Array(VIDEO_PARTS)].map(async (_, i) => {
-      const a = i * size, b = Math.min(total, a + size) - 1;
-      const r = await gmGet(url, true, { Range: `bytes=${a}-${b}` }, 120000);
-      if (r.status !== 206 || !r.response || r.response.size !== b - a + 1) { tripHost(url, r.status); throw new Error('range failed'); }
-      return r.response;
-    }));
-    item.blob = URL.createObjectURL(new Blob(parts, { type }));
-    item.blobSd = url === item.sd;
-    blobItems.push(item);
-    while (blobItems.length > 3) {
-      const old = blobItems.shift();
-      if (old === S.cur) { blobItems.push(old); break; }
-      URL.revokeObjectURL(old.blob);
-      old.blob = null;
-    }
-  }
-  const usesParts = (item, url) => !item.blob && !isForumUrl(url) && hostSlow(url) && !hostTripped(url);
-
-  // The stage's video element: the prepared one when it is this item, else a fresh one
+  // The stage's video element: the prepared one when it is this item, else a fresh one. It plays while it
+  // downloads, and S.curBuffered turns true once it is VIDEO_AHEAD_S ahead (or VIDEO_BUFFER_MS after its first frame).
   function stageVideo(item, rid) {
     const t0 = Date.now();
     let v;
@@ -2518,17 +2512,29 @@ a.xtg-name:hover{text-decoration:underline}
       v.play().catch(() => {});
     } else {
       v = mediaEl('video', { autoplay: true, muted: !!S.muted });
-      const urls = videoUrls(item);
-      if (usesParts(item, urls[0])) {
-        downloadParts(item, urls[0]).then(
-          () => { if (rid === S.renderId) loadVideo(v, item, () => videoFail(item)); },
-          () => { if (rid === S.renderId) loadVideo(v, item, () => videoFail(item), '', urls); },
-        );
-      } else {
-        loadVideo(v, item, () => videoFail(item), '', urls);
-        raceLighter(item, v, rid);
-      }
+      loadVideo(v, item, () => videoFail(item));
+      raceLighter(item, v, rid);
     }
+    // "buffered enough": VIDEO_AHEAD_S seconds ahead of the playhead are downloaded, or the rest of the file.
+    // (canplaythrough is no use here: browsers fire it with the first frame.)
+    const buffered = () => {
+      if (rid !== S.renderId || S.curBuffered) return;
+      S.curBuffered = true;
+      v.removeEventListener('progress', check);
+      v.removeEventListener('timeupdate', check);
+    };
+    const check = () => {
+      const t = v.currentTime, d = v.duration;
+      for (let i = 0; i < v.buffered.length; i++) {
+        if (v.buffered.start(i) <= t + 0.5 && v.buffered.end(i) >= t) {
+          const end = v.buffered.end(i);
+          if (end - t >= VIDEO_AHEAD_S || (d && end >= d - 0.5)) buffered();
+          return;
+        }
+      }
+    };
+    v.addEventListener('progress', check);
+    v.addEventListener('timeupdate', check);
     if (item.thumb) v.poster = item.thumb;
     if (S.resumeAt && S.resumeAt.item === item) { // quality switch: carry on where it was
       const at = S.resumeAt.t;
@@ -2536,7 +2542,8 @@ a.xtg-name:hover{text-decoration:underline}
       v.addEventListener('loadedmetadata', () => { v.currentTime = at; }, { once: true });
     }
     const ready = () => {
-      if (!v._xtgPrepared && !(v._xtgUrl || '').startsWith('blob:')) recordTtff(v._xtgUrl, Date.now() - t0);
+      if (!v._xtgPrepared) recordTtff(v._xtgUrl, Date.now() - t0);
+      setTimeout(buffered, VIDEO_BUFFER_MS); // a long video on a slow line may never "play through"
       mediaReady(rid);
     };
     if (v.readyState >= 2) setTimeout(ready, 0);
@@ -2549,7 +2556,7 @@ a.xtg-name:hover{text-decoration:underline}
     if (S.vquality !== 'auto' || !item.sd) return;
     setTimeout(() => {
       const cur = v._xtgUrl;
-      if (rid !== S.renderId || v.readyState >= 2 || cur === item.sd || isForumUrl(cur) || isForumUrl(item.sd) || hostTripped(item.sd)) return;
+      if (rid !== S.renderId || v.readyState >= 2 || cur === item.sd || isForumUrl(cur) || isForumUrl(item.sd)) return;
       const b = mediaEl('video', { muted: true, preload: 'auto' });
       b._xtgPrepared = true;
       const lose = () => killVideo(b);
@@ -2572,11 +2579,6 @@ a.xtg-name:hover{text-decoration:underline}
   function cycleQuality(item, v) {
     S.vquality = { auto: 'hd', hd: 'sd', sd: 'auto' }[S.vquality];
     store.set('vquality', S.vquality);
-    if (item.blob) { // a downloaded clip is one quality: drop it
-      URL.revokeObjectURL(item.blob);
-      item.blob = null;
-      if (blobItems.includes(item)) blobItems.splice(blobItems.indexOf(item), 1);
-    }
     item.playUrl = S.vquality === 'auto' ? null : S.vquality === 'sd' ? item.sd : item.candidates.find((u) => u !== item.sd);
     const want = videoUrls(item)[0];
     if (want && want !== v._xtgUrl) {
@@ -2588,7 +2590,7 @@ a.xtg-name:hover{text-decoration:underline}
     }
   }
   const qualityLabel = (item, v) => (S.vquality === 'auto' ? 'Auto ' : '') +
-    (v._xtgUrl === item.sd || (v._xtgUrl && v._xtgUrl === item.blob && item.blobSd) ? 'SD' : 'HD');
+    (v._xtgUrl === item.sd ? 'SD' : 'HD');
 
   function mediaEl(tag, props) {
     const node = el(tag, props);
@@ -2864,7 +2866,8 @@ a.xtg-name:hover{text-decoration:underline}
     return new Promise((resolve) => {
       const x = abs(url);
       if (!x) { resolve(null); return; }
-      const v = mediaEl('video', { muted: true, preload: 'auto' });
+      // metadata only: the seek below asks for just the part around that frame, not the start of the whole file
+      const v = mediaEl('video', { muted: true, preload: 'metadata' });
       let done = false;
       const finish = (res) => {
         if (done) return;
@@ -2902,7 +2905,7 @@ a.xtg-name:hover{text-decoration:underline}
     let t, m;
     try {
       if (item.type === 'video') {
-        // the lighter version first, and only once the video being watched shows a frame
+        // the lighter version first, and only once the video being watched has buffered enough
         while (mainVideoBusy()) await sleep(300);
         for (const c of uniq([item.sd, ...item.candidates])) if ((t = ok(await captureFrame(c)))) return t;
       }
@@ -3008,9 +3011,70 @@ a.xtg-name:hover{text-decoration:underline}
     const reel = ui.stage.querySelector('.xtg-reel');
     if (!reel) return;
     const w = Math.max(mw, Math.min(320, sw));
+    const below = sh - (mt + mh);
+    reel.classList.remove('xtg-reel-out');
     reel.style.left = Math.max(0, Math.min(ml - (w - mw) / 2, sw - w)) + 'px';
     reel.style.width = w + 'px';
-    reel.style.bottom = Math.max(0, sh - (mt + mh)) + 'px';
+    reel.style.bottom = Math.max(0, below) + 'px';
+    // (not while the blurred preview fills the stage: the real picture decides where the info fits)
+    if (!reel.classList.contains('xtg-reel-img') || !S.pinInfo || ui.stage.classList.contains('zoomed') || ui.stage.classList.contains('xtg-loading')) return;
+
+    // Pinned image info goes next to the picture, never over it: below it when there is room (wide pictures),
+    // else on its right (tall pictures; the arrows keep their 78 px), else the picture is shrunk to make room
+    // below. The compact height counts: hovering expands the info over the picture on purpose, to read it all.
+    const h = compactHeight(reel);
+    if (below >= h) {
+      reel.classList.add('xtg-reel-out');
+      reel.style.bottom = below - h + 'px';
+      return;
+    }
+    const right = sw - (ml + mw) - 78;
+    if (right >= 200) {
+      const rw = Math.min(320, right - 16);
+      reel.classList.add('xtg-reel-out');
+      reel.style.left = ml + mw + 8 + 'px';
+      reel.style.width = rw + 'px';
+      return;
+    }
+    if (media.tagName === 'IMG' && !media.dataset.reserve) { // the observer calls this again once it has shrunk
+      media.dataset.reserve = h;
+      media.style.maxHeight = `calc(100% - ${h}px)`;
+      media.style.marginBottom = h + 'px';
+    }
+  }
+  // Height of the info in its compact, outside-the-picture form, whatever its state now
+  function compactHeight(reel) {
+    const had = [reel.classList.contains('xtg-compact'), reel.classList.contains('xtg-reel-out')];
+    reel.classList.add('xtg-compact', 'xtg-reel-out');
+    const h = reel.offsetHeight;
+    if (!had[0]) reel.classList.remove('xtg-compact');
+    if (!had[1]) reel.classList.remove('xtg-reel-out');
+    return h;
+  }
+  function releaseReserve() {
+    const img = ui.stage.querySelector(':scope > img');
+    if (!img || !img.dataset.reserve) return;
+    delete img.dataset.reserve;
+    img.style.maxHeight = img.style.marginBottom = '';
+  }
+
+  // Pin button / P key: keep the image info shown (compact, outside the picture) on every image until unpinned
+  function togglePin() {
+    S.pinInfo = !S.pinInfo;
+    store.set('pinInfo', S.pinInfo);
+    if (!S.pinInfo) releaseReserve();
+    applyPin();
+  }
+  function applyPin() {
+    if (!ui) return;
+    ui.stage.classList.toggle('xtg-pinned', S.pinInfo);
+    const reel = ui.stage.querySelector('.xtg-reel-img');
+    if (reel) {
+      const pin = reel.querySelector('.xtg-pin');
+      if (pin) { pin.classList.toggle('on', S.pinInfo); pin.title = tr(S.pinInfo ? 'unpinTip' : 'pinTip'); }
+      if (!reel.classList.contains('xtg-touchinfo')) reel.classList.toggle('xtg-compact', S.pinInfo && !ui.stage.classList.contains('xtg-show'));
+    }
+    positionOverlay();
   }
 
   // Bottom overlay: poster info, plus (for videos) the Reels-style controls
@@ -3019,7 +3083,8 @@ a.xtg-name:hover{text-decoration:underline}
     const label = showsLabel(item);
     if (!label && !isVid) return;
     const reel = el('div', { className: 'xtg-reel ' + (isVid ? 'xtg-reel-vid' : 'xtg-reel-img') });
-    reel.innerHTML = (label ? `<div class="xtg-reel-info">${posterHTML(item, false)}</div>` : '') + (isVid ? `
+    const pin = isVid ? '' : `<button class="xtg-pin" data-act="pin">${ic('pin', 15)}</button>`;
+    reel.innerHTML = (label ? `<div class="xtg-reel-info">${pin}${posterHTML(item, false)}</div>` : '') + (isVid ? `
       <div class="xtg-vbar">
         <div class="xtg-vrow">
           <button class="xtg-vb" data-v="play" title="${esc(tr('playTip'))}"></button>
@@ -3051,9 +3116,20 @@ a.xtg-name:hover{text-decoration:underline}
     requestAnimationFrame(positionOverlay);
   }
 
-  // Images: on desktop the info appears while the mouse is over the image; on touch screens a compact
-  // line (name + one line of text) is always shown and a tap expands it.
+  // Where the mouse last was over the page (null once it left the window): an image that appears under a mouse
+  // that did not move (keyboard, the next button, autoplay) shows its info at once instead of after a move.
+  let mouseAt = null;
+  function trackMouse() {
+    if (trackMouse.done) return;
+    trackMouse.done = true;
+    document.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') mouseAt = { x: e.clientX, y: e.clientY }; }, { capture: true, passive: true });
+    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) mouseAt = null; }, true);
+  }
+
+  // Images: on desktop the info appears while the mouse is over the image, or stays (compact) when pinned; on
+  // touch screens a compact line (name + one line of text) is always shown and a tap expands it.
   function wireImageInfo(img, reel) {
+    applyPin();
     if (!matchMedia('(hover: hover)').matches) {
       reel.classList.add('xtg-touchinfo', 'xtg-compact');
       reel.addEventListener('click', (e) => {
@@ -3063,17 +3139,26 @@ a.xtg-name:hover{text-decoration:underline}
       });
       return;
     }
+    trackMouse();
     let hovering = false;
-    const inside = (node, e) => {
+    const inside = (node, x, y) => {
       const r = node.getBoundingClientRect();
-      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    };
+    const setHover = (h) => {
+      if (h === hovering) return;
+      hovering = h;
+      ui.stage.classList.toggle('xtg-show', h);
+      if (S.pinInfo) { reel.classList.toggle('xtg-compact', !h); positionOverlay(); }
     };
     const onMove = (e) => {
       if (e.pointerType !== 'mouse') return;
-      const h = inside(img, e) || inside(reel, e);
-      if (h !== hovering) { hovering = h; ui.stage.classList.toggle('xtg-show', h); }
+      setHover(inside(img, e.clientX, e.clientY) || inside(reel, e.clientX, e.clientY));
     };
-    const onLeave = () => { hovering = false; ui.stage.classList.remove('xtg-show'); };
+    const onLeave = () => setHover(false);
+    const sync = () => { if (mouseAt && img.isConnected) setHover(inside(img, mouseAt.x, mouseAt.y) || inside(reel, mouseAt.x, mouseAt.y)); };
+    img.addEventListener('load', () => requestAnimationFrame(sync));
+    requestAnimationFrame(sync);
     ui.stage.addEventListener('pointermove', onMove);
     ui.stage.addEventListener('pointerleave', onLeave);
     S.unwireVideo = () => {
@@ -3332,10 +3417,24 @@ a.xtg-name:hover{text-decoration:underline}
     clearTimeout(navTimer);
     S.cur = item;
     S.pendingNav = null;
-    if (item) setFocus(item.page);
+    if (item) { setFocus(item.page); prefetchAhead(item); }
     rememberView();
     if (ui.viewer.hidden && S.view === 'viewer') applyView();
     else renderStage();
+  }
+
+  // Close to the last loaded item in the direction of travel: ask for the next page now, so it is there (or on its
+  // way, at the usual pace) when you reach the end, instead of only then. Also in Saver mode, where nothing else
+  // loads ahead. Not in browse mode: there a page can only be opened by going to it.
+  const PREFETCH_ITEMS = 3;
+  function prefetchAhead(item) {
+    if (browsing() || S.totalPages <= 1) return;
+    const d = S.lastDir || 1;
+    let x = item;
+    for (let k = 0; k < PREFETCH_ITEMS && x; k++) x = neighbour(x, d);
+    if (x) return; // more than PREFETCH_ITEMS loaded items still ahead
+    const gap = firstGap(item.page, d > 0 ? S.totalPages + 1 : 0, d);
+    if (gap) requestPage(gap, { explicit: true });
   }
 
   // First (-1) or last (+1) item of the current filter. In Grid / Scroll views this scrolls the list.
@@ -3385,7 +3484,7 @@ a.xtg-name:hover{text-decoration:underline}
     S.curReady = true;
     clearTimeout(S.slowTimer);
     ui.stage.classList.remove('xtg-loading');
-    setTimeout(() => { if (rid === S.renderId) prepareNext(S.cur); }, 300);
+    setTimeout(() => afterBuffered(rid, () => prepareNext(S.cur)), 300);
     const notice = ui.stage.querySelector('.xtg-slow');
     if (notice) notice.remove();
     if (S.slideshow) scheduleSlide();
@@ -3404,6 +3503,7 @@ a.xtg-name:hover{text-decoration:underline}
     const item = S.cur;
     const rid = ++S.renderId;
     S.curReady = false;
+    S.curBuffered = false;
     clearTimeout(S.slowTimer);
     Z = { s: 1, x: 0, y: 0 };
     // the previous video stops downloading too (the host's bandwidth is not wasted on what is not watched)
@@ -3499,7 +3599,7 @@ a.xtg-name:hover{text-decoration:underline}
     centerStrip(true, true);
     scheduleStatus();
 
-    if (item.type !== 'image' && !item.dead) setTimeout(() => { if (S.cur === item) preloadAround(item); }, 1000);
+    if (item.type !== 'image' && !item.dead) setTimeout(() => afterBuffered(rid, () => preloadAround(item)), 1000);
     if (item.type === 'embed' || item.dead) {
       S.curReady = true; // nothing to wait for
       setTimeout(() => { if (rid === S.renderId) prepareNext(item); }, 1000);

@@ -97,6 +97,7 @@ The view is remembered. Other controls:
   - Quotes, bare links and the text of media links are removed from the text.
   - While an image or video is still loading, the info and the tag stay hidden (only a spinner shows), so nothing gets in the way.
   - Press **I** to toggle the info for the kind being viewed (images or videos). While an image is zoomed, the tag and the info hide.
+  - Image info appears under the mouse, also on the next image when the mouse has not moved. Press **P** (or the pin button on the info) to keep it shown on every image: it then sits next to the picture (below it, or on its right for tall pictures, shrinking the picture a little if there is no room), so it never covers it; hover it to read it all.
   - In Scroll view the info is a card above the item; in Grid view the poster's name appears on video tiles.
   - The thread starter is taken from the thread header, or from the author of the first post on page 1.
 - **Options** (the two-sliders icon):

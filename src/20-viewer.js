@@ -98,10 +98,24 @@
     clearTimeout(navTimer);
     S.cur = item;
     S.pendingNav = null;
-    if (item) setFocus(item.page);
+    if (item) { setFocus(item.page); prefetchAhead(item); }
     rememberView();
     if (ui.viewer.hidden && S.view === 'viewer') applyView();
     else renderStage();
+  }
+
+  // Close to the last loaded item in the direction of travel: ask for the next page now, so it is there (or on its
+  // way, at the usual pace) when you reach the end, instead of only then. Also in Saver mode, where nothing else
+  // loads ahead. Not in browse mode: there a page can only be opened by going to it.
+  const PREFETCH_ITEMS = 3;
+  function prefetchAhead(item) {
+    if (browsing() || S.totalPages <= 1) return;
+    const d = S.lastDir || 1;
+    let x = item;
+    for (let k = 0; k < PREFETCH_ITEMS && x; k++) x = neighbour(x, d);
+    if (x) return; // more than PREFETCH_ITEMS loaded items still ahead
+    const gap = firstGap(item.page, d > 0 ? S.totalPages + 1 : 0, d);
+    if (gap) requestPage(gap, { explicit: true });
   }
 
   // First (-1) or last (+1) item of the current filter. In Grid / Scroll views this scrolls the list.
@@ -151,7 +165,7 @@
     S.curReady = true;
     clearTimeout(S.slowTimer);
     ui.stage.classList.remove('xtg-loading');
-    setTimeout(() => { if (rid === S.renderId) prepareNext(S.cur); }, 300);
+    setTimeout(() => afterBuffered(rid, () => prepareNext(S.cur)), 300);
     const notice = ui.stage.querySelector('.xtg-slow');
     if (notice) notice.remove();
     if (S.slideshow) scheduleSlide();
@@ -170,6 +184,7 @@
     const item = S.cur;
     const rid = ++S.renderId;
     S.curReady = false;
+    S.curBuffered = false;
     clearTimeout(S.slowTimer);
     Z = { s: 1, x: 0, y: 0 };
     // the previous video stops downloading too (the host's bandwidth is not wasted on what is not watched)
@@ -265,7 +280,7 @@
     centerStrip(true, true);
     scheduleStatus();
 
-    if (item.type !== 'image' && !item.dead) setTimeout(() => { if (S.cur === item) preloadAround(item); }, 1000);
+    if (item.type !== 'image' && !item.dead) setTimeout(() => afterBuffered(rid, () => preloadAround(item)), 1000);
     if (item.type === 'embed' || item.dead) {
       S.curReady = true; // nothing to wait for
       setTimeout(() => { if (rid === S.renderId) prepareNext(item); }, 1000);

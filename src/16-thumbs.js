@@ -34,7 +34,8 @@
     return new Promise((resolve) => {
       const x = abs(url);
       if (!x) { resolve(null); return; }
-      const v = mediaEl('video', { muted: true, preload: 'auto' });
+      // metadata only: the seek below asks for just the part around that frame, not the start of the whole file
+      const v = mediaEl('video', { muted: true, preload: 'metadata' });
       let done = false;
       const finish = (res) => {
         if (done) return;
@@ -72,7 +73,7 @@
     let t, m;
     try {
       if (item.type === 'video') {
-        // the lighter version first, and only once the video being watched shows a frame
+        // the lighter version first, and only once the video being watched has buffered enough
         while (mainVideoBusy()) await sleep(300);
         for (const c of uniq([item.sd, ...item.candidates])) if ((t = ok(await captureFrame(c)))) return t;
       }

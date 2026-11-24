@@ -63,9 +63,70 @@
     const reel = ui.stage.querySelector('.xtg-reel');
     if (!reel) return;
     const w = Math.max(mw, Math.min(320, sw));
+    const below = sh - (mt + mh);
+    reel.classList.remove('xtg-reel-out');
     reel.style.left = Math.max(0, Math.min(ml - (w - mw) / 2, sw - w)) + 'px';
     reel.style.width = w + 'px';
-    reel.style.bottom = Math.max(0, sh - (mt + mh)) + 'px';
+    reel.style.bottom = Math.max(0, below) + 'px';
+    // (not while the blurred preview fills the stage: the real picture decides where the info fits)
+    if (!reel.classList.contains('xtg-reel-img') || !S.pinInfo || ui.stage.classList.contains('zoomed') || ui.stage.classList.contains('xtg-loading')) return;
+
+    // Pinned image info goes next to the picture, never over it: below it when there is room (wide pictures),
+    // else on its right (tall pictures; the arrows keep their 78 px), else the picture is shrunk to make room
+    // below. The compact height counts: hovering expands the info over the picture on purpose, to read it all.
+    const h = compactHeight(reel);
+    if (below >= h) {
+      reel.classList.add('xtg-reel-out');
+      reel.style.bottom = below - h + 'px';
+      return;
+    }
+    const right = sw - (ml + mw) - 78;
+    if (right >= 200) {
+      const rw = Math.min(320, right - 16);
+      reel.classList.add('xtg-reel-out');
+      reel.style.left = ml + mw + 8 + 'px';
+      reel.style.width = rw + 'px';
+      return;
+    }
+    if (media.tagName === 'IMG' && !media.dataset.reserve) { // the observer calls this again once it has shrunk
+      media.dataset.reserve = h;
+      media.style.maxHeight = `calc(100% - ${h}px)`;
+      media.style.marginBottom = h + 'px';
+    }
+  }
+  // Height of the info in its compact, outside-the-picture form, whatever its state now
+  function compactHeight(reel) {
+    const had = [reel.classList.contains('xtg-compact'), reel.classList.contains('xtg-reel-out')];
+    reel.classList.add('xtg-compact', 'xtg-reel-out');
+    const h = reel.offsetHeight;
+    if (!had[0]) reel.classList.remove('xtg-compact');
+    if (!had[1]) reel.classList.remove('xtg-reel-out');
+    return h;
+  }
+  function releaseReserve() {
+    const img = ui.stage.querySelector(':scope > img');
+    if (!img || !img.dataset.reserve) return;
+    delete img.dataset.reserve;
+    img.style.maxHeight = img.style.marginBottom = '';
+  }
+
+  // Pin button / P key: keep the image info shown (compact, outside the picture) on every image until unpinned
+  function togglePin() {
+    S.pinInfo = !S.pinInfo;
+    store.set('pinInfo', S.pinInfo);
+    if (!S.pinInfo) releaseReserve();
+    applyPin();
+  }
+  function applyPin() {
+    if (!ui) return;
+    ui.stage.classList.toggle('xtg-pinned', S.pinInfo);
+    const reel = ui.stage.querySelector('.xtg-reel-img');
+    if (reel) {
+      const pin = reel.querySelector('.xtg-pin');
+      if (pin) { pin.classList.toggle('on', S.pinInfo); pin.title = tr(S.pinInfo ? 'unpinTip' : 'pinTip'); }
+      if (!reel.classList.contains('xtg-touchinfo')) reel.classList.toggle('xtg-compact', S.pinInfo && !ui.stage.classList.contains('xtg-show'));
+    }
+    positionOverlay();
   }
 
   // Bottom overlay: poster info, plus (for videos) the Reels-style controls
@@ -74,7 +135,8 @@
     const label = showsLabel(item);
     if (!label && !isVid) return;
     const reel = el('div', { className: 'xtg-reel ' + (isVid ? 'xtg-reel-vid' : 'xtg-reel-img') });
-    reel.innerHTML = (label ? `<div class="xtg-reel-info">${posterHTML(item, false)}</div>` : '') + (isVid ? `
+    const pin = isVid ? '' : `<button class="xtg-pin" data-act="pin">${ic('pin', 15)}</button>`;
+    reel.innerHTML = (label ? `<div class="xtg-reel-info">${pin}${posterHTML(item, false)}</div>` : '') + (isVid ? `
       <div class="xtg-vbar">
         <div class="xtg-vrow">
           <button class="xtg-vb" data-v="play" title="${esc(tr('playTip'))}"></button>
@@ -106,9 +168,20 @@
     requestAnimationFrame(positionOverlay);
   }
 
-  // Images: on desktop the info appears while the mouse is over the image; on touch screens a compact
-  // line (name + one line of text) is always shown and a tap expands it.
+  // Where the mouse last was over the page (null once it left the window): an image that appears under a mouse
+  // that did not move (keyboard, the next button, autoplay) shows its info at once instead of after a move.
+  let mouseAt = null;
+  function trackMouse() {
+    if (trackMouse.done) return;
+    trackMouse.done = true;
+    document.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') mouseAt = { x: e.clientX, y: e.clientY }; }, { capture: true, passive: true });
+    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) mouseAt = null; }, true);
+  }
+
+  // Images: on desktop the info appears while the mouse is over the image, or stays (compact) when pinned; on
+  // touch screens a compact line (name + one line of text) is always shown and a tap expands it.
   function wireImageInfo(img, reel) {
+    applyPin();
     if (!matchMedia('(hover: hover)').matches) {
       reel.classList.add('xtg-touchinfo', 'xtg-compact');
       reel.addEventListener('click', (e) => {
@@ -118,17 +191,26 @@
       });
       return;
     }
+    trackMouse();
     let hovering = false;
-    const inside = (node, e) => {
+    const inside = (node, x, y) => {
       const r = node.getBoundingClientRect();
-      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    };
+    const setHover = (h) => {
+      if (h === hovering) return;
+      hovering = h;
+      ui.stage.classList.toggle('xtg-show', h);
+      if (S.pinInfo) { reel.classList.toggle('xtg-compact', !h); positionOverlay(); }
     };
     const onMove = (e) => {
       if (e.pointerType !== 'mouse') return;
-      const h = inside(img, e) || inside(reel, e);
-      if (h !== hovering) { hovering = h; ui.stage.classList.toggle('xtg-show', h); }
+      setHover(inside(img, e.clientX, e.clientY) || inside(reel, e.clientX, e.clientY));
     };
-    const onLeave = () => { hovering = false; ui.stage.classList.remove('xtg-show'); };
+    const onLeave = () => setHover(false);
+    const sync = () => { if (mouseAt && img.isConnected) setHover(inside(img, mouseAt.x, mouseAt.y) || inside(reel, mouseAt.x, mouseAt.y)); };
+    img.addEventListener('load', () => requestAnimationFrame(sync));
+    requestAnimationFrame(sync);
     ui.stage.addEventListener('pointermove', onMove);
     ui.stage.addEventListener('pointerleave', onLeave);
     S.unwireVideo = () => {
