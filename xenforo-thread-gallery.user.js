@@ -139,6 +139,9 @@
   const TRIP_MS = 15 * 60e3;            // after a captcha / block page: no page requests for this long (or until "Continue")
   const RATE_STRIKES = 3;               // the third "429 Too Many Requests" in a row is treated like a block page
   const PAGE_ATTEMPTS = 4;
+  const BROWSE_MS = 24 * 3600e3;         // a forum that blocks background page requests: browse mode for this long
+  const NAV_TTL_MS = 10 * 60e3;          // a browse-mode move is finished on arrival if the page opens within this (a captcha may come first)
+  const RESUME_TTL = 7 * 24 * 3600e3;    // "you were at page 812" is offered for this long
   const WINDOW_PAGES = 2;               // Balanced mode: pages loaded on each side of the page being viewed
   const BIG_THREAD_PAGES = 50;          // Whole-thread mode asks first above this many pages
   const SETTLE_MS = 1500;               // a page's media is considered complete after this long (links resolve late)              // one try plus three retries for timeouts / server errors
@@ -196,6 +199,10 @@
       netPaused: ' · paused',
       bannerTrip: 'The forum is asking for verification (captcha / security check). Open the thread in a normal tab, complete it, then press Continue.',
       bannerRate: (sec) => `The forum asked to slow down. Resuming in about ${sec} s.`,
+      bannerBrowse: 'This forum does not allow loading pages in the background. The gallery collects the pages you open, and going to another page opens it the normal way.',
+      btnGotIt: 'Got it', btnBgRetry: 'Try background loading again',
+      netBrowse: ' · browse mode', navOpening: (p) => `Opening page ${p}…`,
+      resumeAsk: (p) => `Last time you were at page ${p}.`, btnResume: 'Continue there', btnSkip: 'Dismiss',
       bannerAll: (n, min) => `This thread has ${n} pages. Loading all of them takes about ${min} min and pauses every ${SESSION_CAP} pages.`,
       btnLoadAll: 'Load all', btnLater: 'Later',
       modeTitle: 'Loading pages', modeSaver: 'Saver: only when you get there', modeBalanced: 'Balanced: 2 pages around',
@@ -258,6 +265,10 @@
       netPaused: ' · đã dừng',
       bannerTrip: 'Diễn đàn đang yêu cầu xác minh (captcha / kiểm tra bảo mật). Mở chủ đề trong tab thường để xác minh, rồi bấm Tiếp tục.',
       bannerRate: (sec) => `Diễn đàn yêu cầu giảm tốc. Tự tiếp tục sau khoảng ${sec} giây.`,
+      bannerBrowse: 'Diễn đàn này không cho tải trang ngầm. Album gom ảnh từ các trang bạn mở; đi tới trang khác sẽ mở trang đó như bình thường.',
+      btnGotIt: 'Đã hiểu', btnBgRetry: 'Thử tải ngầm lại',
+      netBrowse: ' · chế độ duyệt', navOpening: (p) => `Đang mở trang ${p}…`,
+      resumeAsk: (p) => `Lần trước bạn xem tới trang ${p}.`, btnResume: 'Xem tiếp từ đó', btnSkip: 'Bỏ qua',
       bannerAll: (n, min) => `Chủ đề có ${n} trang. Tải toàn bộ mất khoảng ${min} phút và tạm dừng sau mỗi ${SESSION_CAP} trang.`,
       btnLoadAll: 'Tải toàn bộ', btnLater: 'Để sau',
       modeTitle: 'Tải trang', modeSaver: 'Tiết kiệm: chỉ khi xem tới', modeBalanced: 'Cân bằng: 2 trang xung quanh',
@@ -458,7 +469,7 @@
   // ---------------------------------------------------------------------------
   const HOUR = 3600e3, DAY = 24 * HOUR;
   const CACHE_SCHEMA = 2; // bump when the shape of cached pages changes
-  const PAGE_TTL = 12 * HOUR, LINK_TTL = 7 * DAY, DEAD_LINK_TTL = DAY, THUMB_TTL = 7 * DAY, MAX_THREADS = 30;
+  const LINK_TTL = 7 * DAY, DEAD_LINK_TTL = DAY, THUMB_TTL = 7 * DAY, MAX_THREADS = 30;
   // Cached pages: old pages rarely change, the last few (where new posts land) are refreshed sooner
   const PAGE_TTL_OLD = 7 * DAY, PAGE_TTL_RECENT = HOUR;
   const pageTtl = (p) => (p >= S.totalPages - 2 ? PAGE_TTL_RECENT : PAGE_TTL_OLD);
@@ -781,6 +792,7 @@
     if (!ui || ui.root.hidden) return 'closed';
     const n = net.read();
     if (n.trip && Date.now() < n.trip.until) return n.trip.auto ? 'rate' : 'trip';
+    if ((n.browse || 0) > Date.now()) return 'browse';
     const from = Math.max(n.capFrom || 0, Date.now() - SESSION_WINDOW_MS);
     if ((n.log || []).filter((t) => t > from).length >= SESSION_CAP) return 'cap';
     return null;
@@ -848,7 +860,7 @@
   const wanted = (job) => job.explicit || inWindow(job.page);
 
   function ensureWindow() {
-    if (!S.started || !S.pageUrl) return;
+    if (!S.started || !S.pageUrl || browsing()) return;
     // queue everything first, then start, so the nearest page goes first
     if (loadsAll()) for (let p = 1; p <= S.totalPages; p++) requestPage(p, { batch: true });
     else if (S.loadMode !== 'saver') for (let d = 1; d <= WINDOW_PAGES; d++) {
@@ -868,7 +880,7 @@
   // Queue a page (nearest to the page being viewed runs first). explicit: asked for by the user, kept even outside
   // the window. batch: queue only, the caller starts the queue.
   function requestPage(p, opts = {}) {
-    if (p < 1 || p > S.totalPages) return;
+    if (p < 1 || p > S.totalPages || browsing()) return;
     const st = S.pageState.get(p);
     if (st === 'loaded' || st === 'loading') return;
     if (st === 'failed' && !opts.explicit) return;
@@ -939,7 +951,15 @@
     if (out.deferred) { requeue(job); return; }
     if (out.error) {
       const kind = out.error.kind;
-      if (kind === 'challenge') { trip(TRIP_MS, false); requeue(job); return; }
+      if (kind === 'challenge') {
+        // a security check on a background request: the forum wants pages opened the normal way (voz.vn does
+        // this for every background request). Switch to browse mode instead of retrying.
+        S.pageState.set(p, 'unloaded');
+        enterBrowse();
+        const nav = S.pendingNav;
+        if (nav && nav.page === p) { S.pendingNav = null; navigateTo(p, nav.intent); }
+        return;
+      }
       if (kind === 'ratelimit') {
         // repeated 429s: back off twice as long each time, and stop for good on the third one
         const strikes = (net.read().strikes || 0) + 1;
@@ -987,22 +1007,67 @@
     nav.run();
   }
 
-  // Ask for page p because the user is moving there; run() once it has loaded
-  function waitForPage(p, run) {
-    S.pendingNav = { page: p, run };
+  function showWait(text) {
+    if (S.view !== 'viewer' || !ui) return;
+    ui.stage.querySelectorAll('.xtg-wait').forEach((x) => x.remove());
+    ui.stage.appendChild(el('div', { className: 'xtg-slow xtg-wait', textContent: text }));
+  }
+
+  // Ask for page p because the user is moving there; run() once it has loaded. intent describes the move
+  // ({ dir: 1 } first item, { dir: -1 } last item, { key } a given item) for browse mode, where the page is
+  // opened the normal way and the gallery picks up there.
+  function waitForPage(p, run, intent = { dir: 1 }) {
+    if (S.pageState.get(p) === 'loaded') { setTimeout(run, 0); return; }
+    if (browsing()) { navigateTo(p, intent); return; }
+    S.pendingNav = { page: p, run, intent };
     requestPage(p, { explicit: true, batch: true });
     setFocus(p);
     pumpPages();
-    if (S.view === 'viewer' && ui && S.pageState.get(p) !== 'loaded') {
-      ui.stage.querySelectorAll('.xtg-wait').forEach((x) => x.remove());
-      ui.stage.appendChild(el('div', { className: 'xtg-slow xtg-wait', textContent: tr('waitPage', p) }));
-    }
+    if (S.pageState.get(p) !== 'loaded') showWait(tr('waitPage', p));
+  }
+
+  // Go to the first (dir 1) or last (dir -1) item of page p, going on past pages without media
+  function goPage(p, dir) {
+    if (p < 1 || p > S.totalPages) return;
+    waitForPage(p, () => {
+      const list = visibleItems().filter((i) => i.page === p);
+      const target = dir < 0 ? list[list.length - 1] : list[0];
+      if (target) { S.userMoved = true; showItem(target); } else goPage(p + dir, dir);
+    }, { dir });
+  }
+
+  // ---- Browse mode: the forum blocks background page requests (Cloudflare challenge on fetch), so pages are
+  // opened as normal page views. Each one is spaced and counted like a background request, and the gallery
+  // reopens on the new page where the move was heading (sessionStorage carries the intent across the reload).
+  const browsing = () => (net.read().browse || 0) > Date.now();
+  function enterBrowse() {
+    net.write({ browse: Date.now() + BROWSE_MS });
+    pageQ.queue.forEach((j) => S.pageState.set(j.page, 'unloaded'));
+    pageQ.queue = [];
+    scheduleStatus();
+    scheduleDividers();
+  }
+  let navTimer = null;
+  function navigateTo(p, intent) {
+    clearTimeout(navTimer);
+    const n = net.read();
+    const from = Math.max(n.capFrom || 0, Date.now() - SESSION_WINDOW_MS);
+    if ((n.log || []).filter((t) => t > from).length >= SESSION_CAP) { S.netState = 'cap'; scheduleStatus(); return; }
+    showWait(tr('navOpening', p));
+    navTimer = setTimeout(() => {
+      if (!ui || ui.root.hidden) return; // closed meanwhile
+      const now = Date.now();
+      net.write({ last: now, log: (net.read().log || []).filter((t) => t > now - SESSION_WINDOW_MS).concat(now) });
+      try { sessionStorage.setItem('xtg_nav', JSON.stringify({ thread: THREAD_ID, page: p, intent, at: now })); } catch (e) { /* ignore */ }
+      location.href = S.pageUrl(p);
+    }, Math.max(0, (n.last || 0) + (n.interval || PAGE_INTERVAL_MS) - Date.now()));
   }
 
   function stopPages() {
     pageQ.queue.forEach((j) => S.pageState.set(j.page, 'unloaded'));
     pageQ.queue = [];
     S.pendingNav = null;
+    clearTimeout(navTimer);
     if (ui) ui.stage.querySelectorAll('.xtg-wait').forEach((x) => x.remove());
     scheduleStatus();
     scheduleDividers();
@@ -1229,7 +1294,11 @@
     loadMode: store.get('loadMode', 'balanced'), // saver | balanced | all
     allConfirmed: false,     // Whole thread on a big thread: the user said "Load all"
     allDismissed: false,     // ... or "Later"
-    pendingNav: null,        // { page, run }: a move waiting for that page to load (next at the edge, first / last, gap click)
+    pendingNav: null,        // { page, run, intent }: a move waiting for that page to load (next at the edge, first / last, gap click)
+    navIntent: null,         // browse mode: the move that opened this page ({ dir } or { key }), finished on arrival
+    startPost: 0,            // post linked in the URL (#post-123, e.g. from /unread): the gallery starts there
+    resumeOffer: null,       // { page, key }: "last time you were at page 812"
+    autoPicked: null,        // the opening item picked automatically (not remembered as "last viewed")
     pageLinks: new Map(),    // page -> links still resolving
     gen: 0,                  // bumped by "Reload" so late results of the previous load are ignored
     noCache: false,          // set by "Reload": ignore cached data for this load
@@ -1630,6 +1699,10 @@ a.xtg-name:hover{text-decoration:underline}
         case 'netcontinue': netContinue(); break;
         case 'loadall': S.allConfirmed = true; ensureWindow(); scheduleStatus(); break;
         case 'later': S.allDismissed = true; scheduleStatus(); break;
+        case 'browseack': store.set('browseAck', true); scheduleStatus(); break;
+        case 'browseoff': store.set('browseAck', false); net.write({ browse: 0 }); ensureWindow(); scheduleStatus(); break;
+        case 'resume': resumeThere(); break;
+        case 'resumeno': S.resumeOffer = null; scheduleStatus(); break;
         default: break;
       }
     });
@@ -1784,11 +1857,17 @@ a.xtg-name:hover{text-decoration:underline}
       html = `<span>${esc(tr('bannerRate', left))}</span>`;
     } else if (st === 'cap') {
       html = `<span>${esc(tr('bannerCap', SESSION_CAP))}</span><button data-act="netcontinue">${esc(tr('btnContinue'))}</button>`;
-    } else if (S.started && S.loadMode === 'all' && !loadsAll() && !S.allDismissed) {
+    } else if (browsing() && !store.get('browseAck', false)) {
+      html = `<span>${esc(tr('bannerBrowse'))}</span><button data-act="browseack">${esc(tr('btnGotIt'))}</button>` +
+        `<button data-act="browseoff">${esc(tr('btnBgRetry'))}</button>`;
+    } else if (S.started && S.loadMode === 'all' && !loadsAll() && !S.allDismissed && !browsing()) {
       const left = S.totalPages - loadedPages();
       const min = Math.max(1, Math.ceil(left * PAGE_INTERVAL_MS / 60e3), Math.floor((left - 1) / SESSION_CAP) * 10);
       html = `<span>${esc(tr('bannerAll', S.totalPages, min))}</span><button data-act="loadall">${esc(tr('btnLoadAll'))}</button>` +
         `<button data-act="later">${esc(tr('btnLater'))}</button>`;
+    } else if (S.resumeOffer && !(S.cur && S.cur.page === S.resumeOffer.page)) {
+      html = `<span>${esc(tr('resumeAsk', S.resumeOffer.page))}</span><button data-act="resume">${esc(tr('btnResume'))}</button>` +
+        `<button data-act="resumeno">${esc(tr('btnSkip'))}</button>`;
     }
     if (ui.banner.dataset.html !== html) {
       ui.banner.dataset.html = html;
@@ -1820,6 +1899,7 @@ a.xtg-name:hover{text-decoration:underline}
     if (S.netState === 'wait') st += tr('netWait');
     else if (S.netState === 'fetching') st += tr('netFetching', S.fetchingPage);
     else if (S.netState === 'hidden') st += tr('netHidden');
+    else if (browsing()) st += tr('netBrowse');
     else if (S.netState === 'cap' || S.netState === 'trip' || S.netState === 'rate') st += tr('netPaused');
     if (S.pagesCached) st += tr('fromCache', S.pagesCached);
     if (S.pageErrors) st += tr('pageErrors', S.pageErrors);
@@ -1852,7 +1932,9 @@ a.xtg-name:hover{text-decoration:underline}
   }
 
   // Opening item: the last viewed one if it is on the page being read, otherwise the first item of that page
-  const startRank = (item) => (item.page === S.startPage ? 0 : 1);
+  // 0: on the page being read, from the linked post on (/unread and post links end in #post-123); 1: earlier on
+  // that page; 2: other pages
+  const startRank = (item) => (item.page !== S.startPage ? 2 : S.startPost && +item.postId < S.startPost ? 1 : 0);
   const isBetterStart = (item) => {
     const a = startRank(item), b = startRank(S.cur);
     return a < b || (a === b && comparePos(item.pos, S.cur.pos) < 0);
@@ -1871,7 +1953,13 @@ a.xtg-name:hover{text-decoration:underline}
       if (!best || startRank(item) < startRank(best)) best = item;
       if (startRank(best) === 0) break; // items are sorted, so the first one on the page being read is the best
     }
-    if (best) showItem(best);
+    const intent = S.navIntent;
+    if (intent) { // arrived here by a move in browse mode: finish that move
+      const onPage = S.items.filter((i) => !i.dead && passesFilter(i) && i.page === S.startPage);
+      best = (intent.key && onPage.find((i) => i.key === intent.key)) || (intent.dir < 0 ? onPage[onPage.length - 1] : onPage[0]) || null;
+      if (!best && intent.dir) { goPage(S.startPage + intent.dir, intent.dir); return; } // no media here: keep going
+    }
+    if (best) { S.autoPicked = best; showItem(best); }
   }
 
   function addItem(spec, pos, ctx) {
@@ -2492,7 +2580,19 @@ a.xtg-name:hover{text-decoration:underline}
       const target = back ? list[list.length - 1] : list[0];
       if (target && S.view === 'viewer') { S.userMoved = true; showItem(target); }
       else if (target && target.el) target.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    });
+    }, { dir: back ? -1 : 1 });
+  }
+
+  function resumeThere() {
+    const o = S.resumeOffer;
+    S.resumeOffer = null;
+    if (!o) return;
+    waitForPage(o.page, () => {
+      const list = visibleItems().filter((i) => i.page === o.page);
+      const target = list.find((i) => i.key === o.key) || list[0];
+      if (target) { S.userMoved = true; showItem(target); }
+    }, { key: o.key, dir: 1 });
+    scheduleStatus();
   }
 
   // Grid / Scroll: a not-loaded gap after the page being viewed that scrolls into view loads its next page,
@@ -2500,7 +2600,7 @@ a.xtg-name:hover{text-decoration:underline}
   const gapObserver = new IntersectionObserver((entries) => {
     for (const e of entries) {
       const g = e.target;
-      if (!e.isIntersecting || S.loadMode === 'saver' || g.dataset.kind !== 'unloaded' || ui.scroll.hidden) continue;
+      if (!e.isIntersecting || S.loadMode === 'saver' || browsing() || g.dataset.kind !== 'unloaded' || ui.scroll.hidden) continue;
       if (+g.dataset.a > curPage()) requestPage(+g.dataset.a, { explicit: true });
     }
   }, { rootMargin: '400px' });
@@ -3034,11 +3134,12 @@ a.xtg-name:hover{text-decoration:underline}
   function rememberView() {
     clearTimeout(viewTimer);
     viewTimer = setTimeout(() => {
-      if (S.cur) cache.put('v:' + THREAD_ID, { lastKey: S.cur.key, lastPage: S.cur.page, totalPages: S.totalPages });
+      if (S.cur && !(S.cur === S.autoPicked && !S.navIntent)) cache.put('v:' + THREAD_ID, { lastKey: S.cur.key, lastPage: S.cur.page, totalPages: S.totalPages });
     }, 800);
   }
 
   function showItem(item) {
+    clearTimeout(navTimer);
     S.cur = item;
     S.pendingNav = null;
     if (item) setFocus(item.page);
@@ -3051,7 +3152,7 @@ a.xtg-name:hover{text-decoration:underline}
   function jumpToEdge(dir) {
     const edge = dir < 0 ? 1 : S.totalPages;
     const st = S.pageState.get(edge);
-    if (st !== 'loaded' && st !== 'failed') { waitForPage(edge, () => jumpToEdge(dir)); return; }
+    if (st !== 'loaded' && st !== 'failed') { waitForPage(edge, () => jumpToEdge(dir), { dir: -dir }); return; }
     const list = visibleItems();
     const target = dir < 0 ? list[0] : list[list.length - 1];
     if (S.view !== 'viewer') {
@@ -3081,7 +3182,7 @@ a.xtg-name:hover{text-decoration:underline}
     const gap = firstGap(here, target ? target.page : d > 0 ? S.totalPages + 1 : 0, d);
     if (byUser) S.userMoved = true;
     S.lastDir = d;
-    if (gap) { waitForPage(gap, () => step(d, false)); return true; }
+    if (gap) { waitForPage(gap, () => step(d, false), { dir: d }); return true; }
     if (!target) return false;
     showItem(target);
     return true;
@@ -3261,7 +3362,12 @@ a.xtg-name:hover{text-decoration:underline}
 
     const rec = await cache.get('v:' + THREAD_ID);
     if (gen !== S.gen) return;
-    S.resumeKey = !S.noCache && rec && rec.lastPage === cur && Date.now() - rec.at < PAGE_TTL ? rec.lastKey : null;
+    const hp = location.hash.match(/^#post-(\d+)/);
+    S.startPost = hp ? +hp[1] : 0;
+    const recent = !S.noCache && rec && rec.lastPage && Date.now() - rec.at < RESUME_TTL;
+    const free = !S.navIntent && !S.startPost; // the user did not arrive here by a move or a post link
+    S.resumeKey = recent && free && rec.lastPage === cur ? rec.lastKey : null;
+    S.resumeOffer = recent && free && rec.lastPage !== cur && rec.lastPage <= S.totalPages ? { page: rec.lastPage, key: rec.lastKey } : null;
     cache.put('v:' + THREAD_ID, Object.assign({}, rec, { totalPages: S.totalPages })); // marks the thread as recently used
     cache.prune();
 
@@ -3330,6 +3436,7 @@ a.xtg-name:hover{text-decoration:underline}
 
   function closeGallery() {
     clearTimeout(S.slideTimer); // pause only: the autoplay setting stays
+    clearTimeout(navTimer);
     dropPrepared();
     ui.stage.querySelectorAll('video').forEach((x) => x.pause());
     ui.stage.querySelectorAll('iframe').forEach((x) => x.remove()); // stop embedded players
@@ -3346,6 +3453,15 @@ a.xtg-name:hover{text-decoration:underline}
   const fab = el('button', { id: 'xtg-fab', title: tr('fabTip'), innerHTML: ic('images', 17) + esc(tr('fab')) });
   fab.onclick = openGallery;
   document.body.appendChild(fab);
+  // arrived by a move in browse mode: reopen the gallery and finish the move
+  try {
+    const nav = JSON.parse(sessionStorage.getItem('xtg_nav') || 'null');
+    sessionStorage.removeItem('xtg_nav');
+    if (nav && nav.thread === THREAD_ID && nav.page === currentPage() && Date.now() - nav.at < NAV_TTL_MS) {
+      S.navIntent = nav.intent || { dir: 1 };
+      openGallery();
+    }
+  } catch (e) { /* ignore */ }
   if (typeof GM_registerMenuCommand === 'function') {
     GM_registerMenuCommand(tr('menuOpen'), openGallery);
     GM_registerMenuCommand(tr('menuHosts'), editHosts);
