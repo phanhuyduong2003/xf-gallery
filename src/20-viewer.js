@@ -10,6 +10,7 @@
     img.style.transform = `translate(${Z.x}px, ${Z.y}px) scale(${Z.s})`;
     img.classList.toggle('zoomed', Z.s > 1);
     ui.stage.classList.toggle('zoomed', Z.s > 1);
+    if (Z.s > 1 && S.cur && S.cur.large && img.src === S.cur.large) upgradeToFull(S.cur, img); // zoomed: the details need the original
   }
 
   function zoomTo(scale, cx, cy) {
@@ -191,10 +192,11 @@
       const img = el('img', { alt: '', draggable: false });
       img.fetchPriority = 'high';
       ui.stage.appendChild(img);
-      if (item.working) {
-        // the full image has loaded before: it comes straight from the browser cache
+      const known = item.working || (fitsLarge() && item.fitted);
+      if (known) {
+        // the image has loaded before: it comes straight from the browser cache
         ui.stage.classList.add('xtg-loading');
-        loadImage(img, item, uniq([item.working, ...item.candidates]), () => markDead(item), (src) => {
+        loadImage(img, item, uniq([known, ...item.candidates]), () => markDead(item), (src) => {
           mediaReady(rid);
           fillThumb(item, src);
           preloadAround(item);
@@ -211,7 +213,7 @@
           mid.fetchPriority = 'high';
           mid.referrerPolicy = 'no-referrer';
           mid.onload = () => {
-            if (fullDone || S.cur !== item || !img.isConnected || mid.naturalWidth <= 1) return;
+            if (fullDone || S.cur !== item || !img.isConnected || isPlaceholder(mid)) return;
             img.src = mid.src;
             img.classList.remove('xtg-preview');
           };
@@ -219,7 +221,7 @@
         }, MID_DELAY_MS);
         const full = new Image();
         full.fetchPriority = 'high';
-        loadImage(full, item, uniq(item.candidates), () => {
+        loadImage(full, item, uniq(fitUrls(item)), () => {
           fullDone = true;
           clearTimeout(midTimer);
           if (S.cur === item) ui.stage.classList.remove('xtg-loading');
@@ -230,10 +232,14 @@
           if (mid && !mid.complete) mid.src = ''; // the full image won: drop the medium request
           fillThumb(item, src); // also when the user has already moved on
           if (rid !== S.renderId) return;
-          img.src = src;
-          img.classList.remove('xtg-preview');
-          mediaReady(rid);
-          preloadAround(item);
+          // decoded before the swap: a big image does not stall the page at the moment it appears
+          full.decode().catch(() => {}).then(() => {
+            if (rid !== S.renderId) return;
+            img.src = src;
+            img.classList.remove('xtg-preview');
+            mediaReady(rid);
+            preloadAround(item);
+          });
         });
       }
       addOverlay(item, img);

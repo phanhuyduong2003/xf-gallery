@@ -16,13 +16,18 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
--
+- Trên màn hình nhỏ hoặc khi bật tiết kiệm dữ liệu, ảnh Imgur mở ở cỡ 1024 px thay vì ảnh gốc; phóng to thì tải ảnh gốc.
 
 ### Thay đổi
--
+- Ảnh/video đã chết được nhớ trong 12 giờ, file tải được được nhớ trong 7 ngày, nên mở lại chủ đề sẽ không hỏi lại các host những file đã biết là hỏng.
+- Nhớ các host chỉ cho tải ảnh qua tiện ích userscript (chặn hotlink): ảnh của các host này bỏ qua các lần tải trực tiếp chắc chắn thất bại. Ảnh đã tải qua tiện ích được giải phóng khỏi bộ nhớ khi vượt quá 30 ảnh gần nhất.
+- Chế độ cuộn: video chỉ bắt đầu tải khi gần tới màn hình, video đang dừng mà cuộn đi xa sẽ nhả file ra (quay lại thì xem tiếp từ chỗ cũ).
+- Ảnh thu nhỏ: tối đa 2 ảnh cùng lúc từ một host (tổng 6), nên một host chậm không còn làm chậm các host khác và diễn đàn nhận ít request cùng lúc hơn.
+- Ảnh và ảnh thu nhỏ được tải thẳng từ máy chủ chứa ảnh trước; proxy ảnh/link của diễn đàn chỉ dùng sau cùng (proxy có thể còn giữ bản sao của ảnh gốc đã chết). Nhanh hơn, và diễn đàn phải phục vụ ít file hơn.
+- Ảnh được tải trước theo hướng đang xem (khi bật tiết kiệm dữ liệu thì chỉ ảnh kế tiếp), ảnh lớn được giải mã xong rồi mới hiện.
 
 ### Sửa lỗi
--
+- Ảnh Imgur đã bị xoá vẫn hiện hình "removed" của Imgur khi đi qua proxy ảnh của diễn đàn, qua tiện ích userscript, hoặc ở ảnh xem trước cỡ trung; nay được đánh dấu là hỏng.
 
 ## [3.0.0] - 2026-11-24
 

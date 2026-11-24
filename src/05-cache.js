@@ -3,11 +3,13 @@
   //   p:<thread>:<page>  parsed media of one thread page
   //   l:<link key>       what an image-host link resolved to
   //   t:<media key>      thumbnail found for a video
+  //   m:<media key>      { ok: url } the file that loaded last time, or { dead: true } (see mediaMemo)
   //   v:<thread>         thread record: last visit, last viewed item
   // ---------------------------------------------------------------------------
   const HOUR = 3600e3, DAY = 24 * HOUR;
   const CACHE_SCHEMA = 2; // bump when the shape of cached pages changes
   const LINK_TTL = 7 * DAY, DEAD_LINK_TTL = DAY, THUMB_TTL = 7 * DAY, MAX_THREADS = 30;
+  const MEDIA_OK_TTL = 7 * DAY, DEAD_MEDIA_TTL = 12 * HOUR; // a host that is down for a while gets another chance soon
   // Cached pages: old pages rarely change, the last few (where new posts land) are refreshed sooner
   const PAGE_TTL_OLD = 7 * DAY, PAGE_TTL_RECENT = HOUR;
   const pageTtl = (p) => (p >= S.totalPages - 2 ? PAGE_TTL_RECENT : PAGE_TTL_OLD);
@@ -78,6 +80,7 @@
         await sweep('p:', PAGE_TTL_OLD);
         await sweep('l:', LINK_TTL);
         await sweep('t:', THUMB_TTL);
+        await sweep('m:', MEDIA_OK_TTL);
       },
     };
     return api;

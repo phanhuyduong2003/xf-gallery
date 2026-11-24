@@ -67,6 +67,18 @@
     return u;
   }
 
+  // The host's own URL first, the forum's proxied copy last: a direct load is one hop from the host, costs the
+  // forum nothing, and the proxy (which may still hold a copy of a dead original) stays as the last resort.
+  function directFirst(urls) {
+    const direct = [], proxied = [];
+    for (const u of urls) {
+      const x = abs(u), inner = x && unproxy(x);
+      if (inner && inner !== x) { direct.push(inner.href); proxied.push(u); } else direct.push(u);
+    }
+    return uniq([...direct, ...proxied]);
+  }
+  const directUrl = (u) => { const x = abs(u), inner = x && unproxy(x); return inner ? inner.href : u; };
+
   // Normalised key used to de-duplicate the same media found several times (quotes, thumbnails, proxies)
   function keyOf(u) {
     const x = unproxy(abs(u));
@@ -79,7 +91,8 @@
     return !!c && (c.saveData || /(^|-)(2g|3g)$/.test(c.effectiveType || ''));
   };
 
-  // Smaller sizes offered by some hosts: Imgur (t = 160 px, l = 640 px) and Chevereto (.th / .md)
+  // Smaller sizes offered by some hosts: Imgur (t = 160 px, l = 640 px, h = 1024 px) and Chevereto (.th / .md).
+  // large: a size that still fills a small screen (see fitUrls); only for JPEGs, where nothing is lost but pixels.
   const CHEVERETO_HOST = /(^|\.)(anh\.moe|ibb\.co|imgbb\.com|jpg\.church|jpg\.pet|jpg5\.su|lensdump\.com)$/;
   function imageSizes(item) {
     const out = {};
@@ -89,7 +102,8 @@
     const h = bareHost(u.hostname);
     let m;
     if (h === 'i.imgur.com' && (m = u.pathname.match(/^\/(\w{5}|\w{7})\.(jpe?g|png|webp)$/i))) {
-      return { small: `https://i.imgur.com/${m[1]}t.jpg`, medium: `https://i.imgur.com/${m[1]}l.jpg` };
+      return { small: `https://i.imgur.com/${m[1]}t.jpg`, medium: `https://i.imgur.com/${m[1]}l.jpg`,
+        large: /^jpe?g$/i.test(m[2]) ? `https://i.imgur.com/${m[1]}h.jpg` : undefined };
     }
     if (CHEVERETO_HOST.test(h) && /\.(jpe?g|png|webp|gif)$/i.test(u.pathname) && !/\.(md|th)\.[a-z0-9]+$/i.test(u.pathname)) {
       const sized = (tag) => u.href.replace(/(\.[a-z0-9]+)(\?.*)?$/i, `.${tag}$1$2`);
@@ -109,6 +123,29 @@
       }
     };
     return (fn) => new Promise((res, rej) => { waiting.push({ fn, res, rej }); next(); });
+  }
+  // Like makeQueue, with at most perHost jobs at once for the same host: one host is not hit by many requests
+  // at once, and a slow host does not hold up the others. Usage: queue(host, fn)
+  function makeHostQueue(limit, perHost) {
+    let active = 0;
+    const busy = new Map();
+    const waiting = [];
+    const next = () => {
+      while (active < limit) {
+        const at = waiting.findIndex((w) => (busy.get(w.host) || 0) < perHost);
+        if (at < 0) return;
+        const { host, fn, res, rej } = waiting.splice(at, 1)[0];
+        active++;
+        busy.set(host, (busy.get(host) || 0) + 1);
+        Promise.resolve().then(fn).then(res, rej).finally(() => {
+          active--;
+          const n = busy.get(host) - 1;
+          if (n) busy.set(host, n); else busy.delete(host);
+          next();
+        });
+      }
+    };
+    return (host, fn) => new Promise((res, rej) => { waiting.push({ host, fn, res, rej }); next(); });
   }
   const resolveQueue = makeQueue(RESOLVE_CONCURRENCY);
   let redgifsToken = null;
@@ -144,13 +181,14 @@
     return { status: r.status, data: r.status === 200 ? JSON.parse(r.response) : null };
   }
 
-  // Download an image through the manager (bypasses hotlink protection) and return a blob: URL
+  // Download an image through the manager (bypasses hotlink protection): { src: its blob: URL, from: the URL used }
   async function gmBlobUrl(urls) {
     for (const u of urls) {
       try {
         const r = await gmGet(u, true);
         const b = r.response;
-        if (r.status === 200 && b && b.size > 200 && /^(image|video)\//.test(b.type || '')) return URL.createObjectURL(b);
+        if (/\/removed\.(png|jpe?g)$/i.test(r.finalUrl || '')) continue; // imgur redirects deleted images to its "removed" picture
+        if (r.status === 200 && b && b.size > 200 && /^(image|video)\//.test(b.type || '')) return { src: URL.createObjectURL(b), from: u };
       } catch (e) { /* try the next URL */ }
     }
     throw new Error('blob download failed');

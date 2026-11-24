@@ -371,6 +371,18 @@
     return u;
   }
 
+  // The host's own URL first, the forum's proxied copy last: a direct load is one hop from the host, costs the
+  // forum nothing, and the proxy (which may still hold a copy of a dead original) stays as the last resort.
+  function directFirst(urls) {
+    const direct = [], proxied = [];
+    for (const u of urls) {
+      const x = abs(u), inner = x && unproxy(x);
+      if (inner && inner !== x) { direct.push(inner.href); proxied.push(u); } else direct.push(u);
+    }
+    return uniq([...direct, ...proxied]);
+  }
+  const directUrl = (u) => { const x = abs(u), inner = x && unproxy(x); return inner ? inner.href : u; };
+
   // Normalised key used to de-duplicate the same media found several times (quotes, thumbnails, proxies)
   function keyOf(u) {
     const x = unproxy(abs(u));
@@ -383,7 +395,8 @@
     return !!c && (c.saveData || /(^|-)(2g|3g)$/.test(c.effectiveType || ''));
   };
 
-  // Smaller sizes offered by some hosts: Imgur (t = 160 px, l = 640 px) and Chevereto (.th / .md)
+  // Smaller sizes offered by some hosts: Imgur (t = 160 px, l = 640 px, h = 1024 px) and Chevereto (.th / .md).
+  // large: a size that still fills a small screen (see fitUrls); only for JPEGs, where nothing is lost but pixels.
   const CHEVERETO_HOST = /(^|\.)(anh\.moe|ibb\.co|imgbb\.com|jpg\.church|jpg\.pet|jpg5\.su|lensdump\.com)$/;
   function imageSizes(item) {
     const out = {};
@@ -393,7 +406,8 @@
     const h = bareHost(u.hostname);
     let m;
     if (h === 'i.imgur.com' && (m = u.pathname.match(/^\/(\w{5}|\w{7})\.(jpe?g|png|webp)$/i))) {
-      return { small: `https://i.imgur.com/${m[1]}t.jpg`, medium: `https://i.imgur.com/${m[1]}l.jpg` };
+      return { small: `https://i.imgur.com/${m[1]}t.jpg`, medium: `https://i.imgur.com/${m[1]}l.jpg`,
+        large: /^jpe?g$/i.test(m[2]) ? `https://i.imgur.com/${m[1]}h.jpg` : undefined };
     }
     if (CHEVERETO_HOST.test(h) && /\.(jpe?g|png|webp|gif)$/i.test(u.pathname) && !/\.(md|th)\.[a-z0-9]+$/i.test(u.pathname)) {
       const sized = (tag) => u.href.replace(/(\.[a-z0-9]+)(\?.*)?$/i, `.${tag}$1$2`);
@@ -413,6 +427,29 @@
       }
     };
     return (fn) => new Promise((res, rej) => { waiting.push({ fn, res, rej }); next(); });
+  }
+  // Like makeQueue, with at most perHost jobs at once for the same host: one host is not hit by many requests
+  // at once, and a slow host does not hold up the others. Usage: queue(host, fn)
+  function makeHostQueue(limit, perHost) {
+    let active = 0;
+    const busy = new Map();
+    const waiting = [];
+    const next = () => {
+      while (active < limit) {
+        const at = waiting.findIndex((w) => (busy.get(w.host) || 0) < perHost);
+        if (at < 0) return;
+        const { host, fn, res, rej } = waiting.splice(at, 1)[0];
+        active++;
+        busy.set(host, (busy.get(host) || 0) + 1);
+        Promise.resolve().then(fn).then(res, rej).finally(() => {
+          active--;
+          const n = busy.get(host) - 1;
+          if (n) busy.set(host, n); else busy.delete(host);
+          next();
+        });
+      }
+    };
+    return (host, fn) => new Promise((res, rej) => { waiting.push({ host, fn, res, rej }); next(); });
   }
   const resolveQueue = makeQueue(RESOLVE_CONCURRENCY);
   let redgifsToken = null;
@@ -448,13 +485,14 @@
     return { status: r.status, data: r.status === 200 ? JSON.parse(r.response) : null };
   }
 
-  // Download an image through the manager (bypasses hotlink protection) and return a blob: URL
+  // Download an image through the manager (bypasses hotlink protection): { src: its blob: URL, from: the URL used }
   async function gmBlobUrl(urls) {
     for (const u of urls) {
       try {
         const r = await gmGet(u, true);
         const b = r.response;
-        if (r.status === 200 && b && b.size > 200 && /^(image|video)\//.test(b.type || '')) return URL.createObjectURL(b);
+        if (/\/removed\.(png|jpe?g)$/i.test(r.finalUrl || '')) continue; // imgur redirects deleted images to its "removed" picture
+        if (r.status === 200 && b && b.size > 200 && /^(image|video)\//.test(b.type || '')) return { src: URL.createObjectURL(b), from: u };
       } catch (e) { /* try the next URL */ }
     }
     throw new Error('blob download failed');
@@ -465,11 +503,13 @@
   //   p:<thread>:<page>  parsed media of one thread page
   //   l:<link key>       what an image-host link resolved to
   //   t:<media key>      thumbnail found for a video
+  //   m:<media key>      { ok: url } the file that loaded last time, or { dead: true } (see mediaMemo)
   //   v:<thread>         thread record: last visit, last viewed item
   // ---------------------------------------------------------------------------
   const HOUR = 3600e3, DAY = 24 * HOUR;
   const CACHE_SCHEMA = 2; // bump when the shape of cached pages changes
   const LINK_TTL = 7 * DAY, DEAD_LINK_TTL = DAY, THUMB_TTL = 7 * DAY, MAX_THREADS = 30;
+  const MEDIA_OK_TTL = 7 * DAY, DEAD_MEDIA_TTL = 12 * HOUR; // a host that is down for a while gets another chance soon
   // Cached pages: old pages rarely change, the last few (where new posts land) are refreshed sooner
   const PAGE_TTL_OLD = 7 * DAY, PAGE_TTL_RECENT = HOUR;
   const pageTtl = (p) => (p >= S.totalPages - 2 ? PAGE_TTL_RECENT : PAGE_TTL_OLD);
@@ -540,6 +580,7 @@
         await sweep('p:', PAGE_TTL_OLD);
         await sweep('l:', LINK_TTL);
         await sweep('t:', THUMB_TTL);
+        await sweep('m:', MEDIA_OK_TTL);
       },
     };
     return api;
@@ -1978,6 +2019,9 @@ a.xtg-name:hover{text-decoration:underline}
       key, pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, caption: ctx.caption || null, dead: spec.type === 'dead',
     });
     if (item.dead) item.type = 'image';
+    // here rather than when reading the page, so pages already in the cache get the same order
+    if (item.candidates.length) item.candidates = directFirst(item.candidates);
+    if (item.thumb) item.thumb = directUrl(item.thumb);
     if (item.type === 'image' && !item.dead) Object.assign(item, imageSizes(item));
 
     // binary insert to keep thread order (async results arrive out of order)
@@ -1995,6 +2039,8 @@ a.xtg-name:hover{text-decoration:underline}
       ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
       scheduleDividers();
       if (item.type !== 'image' && !item.thumb) ensureThumb(item);
+      // a file found dead on a recent visit is shown as dead straight away, without asking its host again
+      if (item.type !== 'embed') mediaMemo(item).then((m) => { if (m && m.dead && !item.dead && S.items.includes(item)) markDead(item); });
       // pick the opening item until the user navigates (results arrive out of order)
       if (!S.userMoved && passesFilter(item)) {
         if (S.resumeKey && key === S.resumeKey) { S.userMoved = true; showItem(item); }
@@ -2075,6 +2121,7 @@ a.xtg-name:hover{text-decoration:underline}
   function markDead(item) {
     if (item.dead) return;
     item.dead = true;
+    if (item.type !== 'embed') rememberDead(item);
     replaceTile(item);
     if (item.thumbEl) { item.thumbEl.remove(); item.thumbEl = null; scheduleDividers(); }
     if (S.cur === item && !step(S.lastDir, false) && !step(-S.lastDir, false)) renderStage();
@@ -2088,43 +2135,144 @@ a.xtg-name:hover{text-decoration:underline}
   // ---------------------------------------------------------------------------
   function isPlaceholder(img) {
     const w = img.naturalWidth, h = img.naturalHeight;
-    return w <= 1 || h <= 1 || (/imgur\.com/.test(img.src) && w === 161 && h === 81); // imgur "removed" image
+    if (w <= 1 || h <= 1) return true;
+    // imgur "removed" image, also through the manager (blob: URL) or the forum's image proxy, which caches it
+    const from = unproxy(abs(img._xtgFrom || img.src));
+    return w === 161 && h === 81 && !!from && /(^|\.)imgur\.com$/.test(from.hostname);
   }
 
-  // Try each URL; then download through the manager (hotlink protection); retry everything once
-  // after 2 s (flaky network) before declaring the item dead.
+  // What happened to a file on an earlier visit (cache "m:<key>"): { ok: the candidate that loaded } or { dead: true }.
+  // Read once per item, ignored by "Reload (ignore cache)". A dead file is not asked for again for DEAD_MEDIA_TTL,
+  // and the file that loaded is tried first, so neither costs failed requests on the next visit.
+  function mediaMemo(item) {
+    if (!item.memo) {
+      item.memo = (S.noCache || !item.key ? Promise.resolve(null) : cache.get('m:' + item.key, MEDIA_OK_TTL).catch(() => null))
+        .then((m) => {
+          if (m && m.dead && Date.now() - m.at > DEAD_MEDIA_TTL) return null;
+          if (m && m.dead) item.memoDead = true;
+          if (m && m.ok) item.savedOk = m.ok;
+          return m;
+        });
+    }
+    return item.memo;
+  }
+  function rememberOk(item, url) {
+    if (!item.key || item.savedOk === url || (!item.savedOk && url === item.candidates[0])) return; // nothing to learn
+    item.savedOk = url;
+    cache.put('m:' + item.key, { ok: url });
+  }
+  function rememberDead(item) {
+    // offline says nothing about the file; links that resolved to nothing are cached as such already
+    if (!item.key || item.key.startsWith('dead:') || item.memoDead || !navigator.onLine) return;
+    item.memoDead = true;
+    cache.put('m:' + item.key, { dead: true });
+  }
+
+  // Hosts whose images only load through the manager (hotlink protection), learnt when a file of theirs failed
+  // directly and then showed as a real picture through the manager, kept for MANAGER_HOST_TTL. Their files skip
+  // the direct attempts that would fail.
+  const MANAGER_HOST_TTL = 7 * DAY;
+  const managerHost = (u) => (store.get('mgrHosts', {})[hostOf(u)] || 0) > Date.now();
+  function learnManagerHost(u) {
+    const all = store.get('mgrHosts', {}), now = Date.now();
+    for (const h of Object.keys(all)) if (all[h] < now) delete all[h];
+    all[hostOf(u)] = now + MANAGER_HOST_TTL;
+    store.set('mgrHosts', all);
+  }
+
+  // Images downloaded through the manager are blob: URLs held in memory: the IMAGE_BLOBS_MAX most recent are kept.
+  // One download per item and size, shared by its thumbnail, tile and the viewer.
+  const IMAGE_BLOBS_MAX = 30;
+  const imageBlobs = []; // { item, src, k }, oldest first
+  function managerBlob(item, urls) {
+    const jobs = item.blobJobs || (item.blobJobs = new Map());
+    const k = urls[0];
+    if (!jobs.has(k)) {
+      jobs.set(k, gmBlobUrl(urls).then((r) => {
+        imageBlobs.push({ item, src: r.src, k });
+        while (imageBlobs.length > IMAGE_BLOBS_MAX) {
+          const at = imageBlobs.findIndex((b) => b.item !== S.cur);
+          const old = imageBlobs.splice(at, 1)[0];
+          URL.revokeObjectURL(old.src); // pictures already on screen stay; a later view downloads again
+          old.item.blobJobs.delete(old.k);
+          if (old.item.working === old.src) old.item.working = null;
+          if (old.item.shown === old.src) old.item.shown = null;
+        }
+        return r;
+      }, (e) => { jobs.delete(k); throw e; }));
+    }
+    return jobs.get(k);
+  }
+
+  // Small screen or data saver: the host's large size (Imgur 1024 px) instead of the original, which loads on zoom.
+  const fitsLarge = () => slowNet() || Math.max(innerWidth, innerHeight) <= 1100;
+  const fitUrls = (item) => (item.large && fitsLarge() ? uniq([item.large, ...item.candidates]) : item.candidates);
+
+  // Try each URL; then download through the manager (hotlink protection); retry everything once after 2 s
+  // (flaky network) before declaring the item dead. A file known dead fails at once; the file that loaded last
+  // time goes first; URLs on hosts known to need the manager go through it first and directly only as a last resort.
   function loadImage(img, item, urls, onFail, onOk) {
-    let i = 0, blobTried = false, retried = false;
+    let i = 0, blobTried = false, retried = false, later = [], list = urls;
+    const canBlob = !item.attachment && item.candidates.length > 0;
     img.referrerPolicy = 'no-referrer';
     img.decoding = 'async';
     const giveUp = () => {
       if (retried) { onFail(); return; }
       retried = true;
-      setTimeout(() => { i = 0; tryNext(); }, 2000);
+      setTimeout(() => { list = urls; i = 0; later = []; tryNext(); }, 2000);
+    };
+    const viaManager = () => {
+      blobTried = true;
+      managerBlob(item, uniq(urls.filter((u) => /^https?:/i.test(u)).concat(item.candidates))).then((r) => {
+        img._xtgFrom = r.from;
+        img.src = r.src;
+      }, tryNext);
     };
     const tryNext = () => {
-      if (i < urls.length) { img.src = urls[i++]; return; }
-      if (!blobTried && !item.attachment && item.candidates.length) {
-        blobTried = true;
-        gmBlobUrl(item.candidates).then((b) => { item.working = b; img.src = b; }, giveUp);
+      while (i < list.length) {
+        const u = list[i++];
+        if (!blobTried && canBlob && managerHost(u)) { later.push(u); continue; }
+        img.src = u;
         return;
       }
+      if (!blobTried && canBlob) { viaManager(); return; }
+      if (later.length) { list = later; later = []; i = 0; tryNext(); return; }
       giveUp();
     };
-    img.onerror = tryNext;
+    const failedDirect = new Set(); // hosts whose files errored when loaded directly (not placeholders: those are dead)
+    img.onerror = () => {
+      if (!img.src.startsWith('blob:')) failedDirect.add(hostOf(img.src));
+      tryNext();
+    };
     img.onload = () => {
       if (isPlaceholder(img)) { tryNext(); return; }
-      if (!item.working && item.candidates.includes(img.src)) item.working = img.src;
+      if (img._xtgFrom && img.src.startsWith('blob:')) {
+        if (failedDirect.has(hostOf(img._xtgFrom))) learnManagerHost(img._xtgFrom); // failed directly, fine through the manager
+        if (item.candidates.includes(img._xtgFrom)) item.working = img.src;
+      } else if (item.candidates.includes(img.src)) {
+        if (!item.working) item.working = img.src;
+        rememberOk(item, img.src);
+      } else if (img.src === item.large) item.fitted = img.src;
       if (onOk) onOk(img.src);
     };
-    tryNext();
+    mediaMemo(item).then((m) => {
+      if (m && m.dead) { onFail(); return; }
+      if (m && m.ok && item.candidates.includes(m.ok)) {
+        const at = urls.findIndex((u) => item.candidates.includes(u));
+        if (at >= 0) urls = uniq([...urls.slice(0, at), m.ok, ...urls.slice(at)]);
+      }
+      list = urls;
+      tryNext();
+    });
   }
 
-  // Thumbnails load only when (nearly) visible and at most THUMB_LOADS at a time. The image being viewed
-  // is then not stuck behind dozens of thumbnail downloads, and hosts get fewer simultaneous requests.
-  const THUMB_LOADS = 4;
+  // Thumbnails load only when (nearly) visible, at most THUMB_LOADS at a time and THUMB_LOADS_PER_HOST per host.
+  // The image being viewed is then not stuck behind dozens of thumbnail downloads, no host gets many requests at
+  // once (the forum's attachments included), and a slow host does not hold up thumbnails from the others.
+  const THUMB_LOADS = 6;
+  const THUMB_LOADS_PER_HOST = 2;
   const MID_DELAY_MS = 800; // wait this long for the full image before asking for a medium size
-  const thumbLoadQueue = makeQueue(THUMB_LOADS);
+  const thumbLoadQueue = makeHostQueue(THUMB_LOADS, THUMB_LOADS_PER_HOST);
   const lazyObserver = new IntersectionObserver((entries) => {
     for (const en of entries) {
       if (!en.isIntersecting) continue;
@@ -2155,7 +2303,7 @@ a.xtg-name:hover{text-decoration:underline}
   function lazyImage(img, item, urls, onFail, priority = 'low') {
     img.fetchPriority = priority;
     img.draggable = false;
-    img.xtgStart = () => thumbLoadQueue(() => new Promise((done) => {
+    img.xtgStart = () => thumbLoadQueue(hostOf(urls[0] || ''), () => new Promise((done) => {
       if (!img.isConnected || img.getAttribute('src')) { done(); return; }
       // scrolled out of view while waiting in the queue (autoplay, dragging): wait until it is visible again
       if (!nearView(img)) { lazyObserver.observe(img); done(); return; }
@@ -2165,21 +2313,35 @@ a.xtg-name:hover{text-decoration:underline}
     lazyObserver.observe(img);
   }
 
-  // Preload the neighbours of the viewed item one at a time, after the item itself has loaded
+  // Preload the neighbours of the viewed item one at a time, after the item itself has loaded: two ahead in the
+  // direction of travel and one behind (only the next one on data saver)
   const preloadQueue = makeQueue(1);
   function preloadAround(item) {
-    const i = S.items.indexOf(item);
-    [1, 2, -1].map((d) => S.items[i + d]).filter((x) => x && !x.dead && x.type === 'image' && !x.working).forEach((x) => {
+    const d = S.lastDir || 1;
+    const n1 = neighbour(item, d), n2 = n1 && neighbour(n1, d), back = neighbour(item, -d);
+    const saver = navigator.connection && navigator.connection.saveData;
+    (saver ? [n1] : [n1, n2, back]).filter((x) => x && x.type === 'image' && !x.dead && !x.working && !x.fitted).forEach((x) => {
       preloadQueue(() => new Promise((done) => {
-        if (S.cur !== item || x.working) { done(); return; } // the user moved on: skip stale preloads
+        if (S.cur !== item || x.working || x.fitted) { done(); return; } // the user moved on: skip stale preloads
         const im = new Image();
         im.fetchPriority = 'low';
         setTimeout(done, QUEUE_SLOT_MS);
-        loadImage(im, x, x.candidates.slice(), done, (src) => { fillThumb(x, src); done(); });
+        loadImage(im, x, fitUrls(x), done, (src) => { fillThumb(x, src); done(); });
       }));
     });
   }
 
+  // Zoomed in on the large size: load the original and swap it in (it becomes the item's working file)
+  function upgradeToFull(item, img) {
+    if (item.fullLoading || item.working) return;
+    item.fullLoading = true;
+    const full = new Image();
+    full.fetchPriority = 'high';
+    loadImage(full, item, item.candidates.slice(), () => { item.fullLoading = false; }, (src) => {
+      item.fullLoading = false;
+      full.decode().catch(() => {}).then(() => { if (S.cur === item && img.isConnected) img.src = src; });
+    });
+  }
   // ---------------------------------------------------------------------------
   // Video delivery. Video hosts are not the forum, so they can take more than one request at a time, but:
   //   - the forum's own files (attachments, its image proxy) only ever get normal playback;
@@ -2470,13 +2632,14 @@ a.xtg-name:hover{text-decoration:underline}
 
     if (item.type === 'image') {
       const img = el('img', { alt: '' });
-      lazyImage(img, item, uniq(list ? [item.working, ...item.candidates] : [item.medium, item.working, item.thumb, ...item.candidates]), fail, list ? 'auto' : 'low');
+      lazyImage(img, item, uniq(list ? [item.working, ...fitUrls(item)] : [item.medium, item.working, item.thumb, ...item.candidates]), fail, list ? 'auto' : 'low');
       img.onclick = open;
       t.appendChild(img);
     } else if (list && item.type === 'video') {
-      const v = mediaEl('video', { controls: true, preload: 'metadata' });
+      const v = mediaEl('video', { controls: true, preload: item.thumb ? 'none' : 'metadata' });
       if (item.thumb) v.poster = item.thumb;
-      loadVideo(v, item, () => videoFail(item));
+      v._xtgItem = item;
+      listVideoObserver().observe(v);
       t.appendChild(v);
     } else if (list) {
       t.appendChild(iframeEl(item.url, true));
@@ -2501,6 +2664,32 @@ a.xtg-name:hover{text-decoration:underline}
     }
     t.appendChild(cap);
     return t;
+  }
+
+  // Scroll view: a video asks its host for anything only once it comes near the screen, and a paused one that
+  // goes far off screen lets its file go (connection and buffer); it carries on from the same point when back.
+  let listVideoObs = null;
+  function listVideoObserver() {
+    if (!listVideoObs) {
+      listVideoObs = new IntersectionObserver((entries) => {
+        for (const en of entries) {
+          const v = en.target, item = v._xtgItem;
+          if (en.isIntersecting && !v._xtgLoaded) {
+            v._xtgLoaded = true;
+            if (v._xtgResume) {
+              const at = v._xtgResume;
+              v.addEventListener('loadedmetadata', () => { v.currentTime = at; }, { once: true });
+            }
+            loadVideo(v, item, () => videoFail(item));
+          } else if (!en.isIntersecting && v._xtgLoaded && v.paused) {
+            v._xtgResume = v.currentTime || 0;
+            v._xtgLoaded = false;
+            killVideo(v);
+          }
+        }
+      }, { root: ui.scroll, rootMargin: '600px 0px' });
+    }
+    return listVideoObs;
   }
 
   function replaceTile(item) {
@@ -3055,6 +3244,7 @@ a.xtg-name:hover{text-decoration:underline}
     img.style.transform = `translate(${Z.x}px, ${Z.y}px) scale(${Z.s})`;
     img.classList.toggle('zoomed', Z.s > 1);
     ui.stage.classList.toggle('zoomed', Z.s > 1);
+    if (Z.s > 1 && S.cur && S.cur.large && img.src === S.cur.large) upgradeToFull(S.cur, img); // zoomed: the details need the original
   }
 
   function zoomTo(scale, cx, cy) {
@@ -3236,10 +3426,11 @@ a.xtg-name:hover{text-decoration:underline}
       const img = el('img', { alt: '', draggable: false });
       img.fetchPriority = 'high';
       ui.stage.appendChild(img);
-      if (item.working) {
-        // the full image has loaded before: it comes straight from the browser cache
+      const known = item.working || (fitsLarge() && item.fitted);
+      if (known) {
+        // the image has loaded before: it comes straight from the browser cache
         ui.stage.classList.add('xtg-loading');
-        loadImage(img, item, uniq([item.working, ...item.candidates]), () => markDead(item), (src) => {
+        loadImage(img, item, uniq([known, ...item.candidates]), () => markDead(item), (src) => {
           mediaReady(rid);
           fillThumb(item, src);
           preloadAround(item);
@@ -3256,7 +3447,7 @@ a.xtg-name:hover{text-decoration:underline}
           mid.fetchPriority = 'high';
           mid.referrerPolicy = 'no-referrer';
           mid.onload = () => {
-            if (fullDone || S.cur !== item || !img.isConnected || mid.naturalWidth <= 1) return;
+            if (fullDone || S.cur !== item || !img.isConnected || isPlaceholder(mid)) return;
             img.src = mid.src;
             img.classList.remove('xtg-preview');
           };
@@ -3264,7 +3455,7 @@ a.xtg-name:hover{text-decoration:underline}
         }, MID_DELAY_MS);
         const full = new Image();
         full.fetchPriority = 'high';
-        loadImage(full, item, uniq(item.candidates), () => {
+        loadImage(full, item, uniq(fitUrls(item)), () => {
           fullDone = true;
           clearTimeout(midTimer);
           if (S.cur === item) ui.stage.classList.remove('xtg-loading');
@@ -3275,10 +3466,14 @@ a.xtg-name:hover{text-decoration:underline}
           if (mid && !mid.complete) mid.src = ''; // the full image won: drop the medium request
           fillThumb(item, src); // also when the user has already moved on
           if (rid !== S.renderId) return;
-          img.src = src;
-          img.classList.remove('xtg-preview');
-          mediaReady(rid);
-          preloadAround(item);
+          // decoded before the swap: a big image does not stall the page at the moment it appears
+          full.decode().catch(() => {}).then(() => {
+            if (rid !== S.renderId) return;
+            img.src = src;
+            img.classList.remove('xtg-preview');
+            mediaReady(rid);
+            preloadAround(item);
+          });
         });
       }
       addOverlay(item, img);

@@ -27,13 +27,14 @@
 
     if (item.type === 'image') {
       const img = el('img', { alt: '' });
-      lazyImage(img, item, uniq(list ? [item.working, ...item.candidates] : [item.medium, item.working, item.thumb, ...item.candidates]), fail, list ? 'auto' : 'low');
+      lazyImage(img, item, uniq(list ? [item.working, ...fitUrls(item)] : [item.medium, item.working, item.thumb, ...item.candidates]), fail, list ? 'auto' : 'low');
       img.onclick = open;
       t.appendChild(img);
     } else if (list && item.type === 'video') {
-      const v = mediaEl('video', { controls: true, preload: 'metadata' });
+      const v = mediaEl('video', { controls: true, preload: item.thumb ? 'none' : 'metadata' });
       if (item.thumb) v.poster = item.thumb;
-      loadVideo(v, item, () => videoFail(item));
+      v._xtgItem = item;
+      listVideoObserver().observe(v);
       t.appendChild(v);
     } else if (list) {
       t.appendChild(iframeEl(item.url, true));
@@ -58,6 +59,32 @@
     }
     t.appendChild(cap);
     return t;
+  }
+
+  // Scroll view: a video asks its host for anything only once it comes near the screen, and a paused one that
+  // goes far off screen lets its file go (connection and buffer); it carries on from the same point when back.
+  let listVideoObs = null;
+  function listVideoObserver() {
+    if (!listVideoObs) {
+      listVideoObs = new IntersectionObserver((entries) => {
+        for (const en of entries) {
+          const v = en.target, item = v._xtgItem;
+          if (en.isIntersecting && !v._xtgLoaded) {
+            v._xtgLoaded = true;
+            if (v._xtgResume) {
+              const at = v._xtgResume;
+              v.addEventListener('loadedmetadata', () => { v.currentTime = at; }, { once: true });
+            }
+            loadVideo(v, item, () => videoFail(item));
+          } else if (!en.isIntersecting && v._xtgLoaded && v.paused) {
+            v._xtgResume = v.currentTime || 0;
+            v._xtgLoaded = false;
+            killVideo(v);
+          }
+        }
+      }, { root: ui.scroll, rootMargin: '600px 0px' });
+    }
+    return listVideoObs;
   }
 
   function replaceTile(item) {

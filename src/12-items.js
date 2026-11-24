@@ -56,6 +56,9 @@
       key, pos, page: ctx.page, postId: ctx.postId, pageUrl: ctx.pageUrl, meta: ctx.meta, caption: ctx.caption || null, dead: spec.type === 'dead',
     });
     if (item.dead) item.type = 'image';
+    // here rather than when reading the page, so pages already in the cache get the same order
+    if (item.candidates.length) item.candidates = directFirst(item.candidates);
+    if (item.thumb) item.thumb = directUrl(item.thumb);
     if (item.type === 'image' && !item.dead) Object.assign(item, imageSizes(item));
 
     // binary insert to keep thread order (async results arrive out of order)
@@ -73,6 +76,8 @@
       ui.strip.insertBefore(item.thumbEl, nextThumb ? nextThumb.thumbEl : null);
       scheduleDividers();
       if (item.type !== 'image' && !item.thumb) ensureThumb(item);
+      // a file found dead on a recent visit is shown as dead straight away, without asking its host again
+      if (item.type !== 'embed') mediaMemo(item).then((m) => { if (m && m.dead && !item.dead && S.items.includes(item)) markDead(item); });
       // pick the opening item until the user navigates (results arrive out of order)
       if (!S.userMoved && passesFilter(item)) {
         if (S.resumeKey && key === S.resumeKey) { S.userMoved = true; showItem(item); }
@@ -153,6 +158,7 @@
   function markDead(item) {
     if (item.dead) return;
     item.dead = true;
+    if (item.type !== 'embed') rememberDead(item);
     replaceTile(item);
     if (item.thumbEl) { item.thumbEl.remove(); item.thumbEl = null; scheduleDividers(); }
     if (S.cur === item && !step(S.lastDir, false) && !step(-S.lastDir, false)) renderStage();

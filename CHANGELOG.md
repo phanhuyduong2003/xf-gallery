@@ -16,13 +16,18 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 ## [Unreleased]
 
 ### Added
--
+- On a small screen or with data saver on, Imgur photos open at 1024 px instead of the original; zooming in loads the original.
 
 ### Changed
--
+- Media found dead is remembered for 12 hours and the file that loaded is remembered for 7 days, so opening the thread again asks no host for files known to fail.
+- Hosts that only serve images through the userscript manager (hotlink protection) are remembered: their images skip the direct tries that would fail. Downloaded images are released from memory beyond the 30 most recent.
+- Scroll view: videos only start loading near the screen, and a paused one far off screen lets its file go (it resumes from the same point).
+- Thumbnails: at most 2 at a time from the same host (6 in all), so one slow host no longer holds up the others and the forum gets fewer requests at once.
+- Images and thumbnails load straight from their host first; the forum's image/link proxy is only the last resort (it may still hold a copy of a dead original). Faster, and the forum serves fewer files.
+- Images are preloaded in the direction you are browsing (only the next one on data saver), and big images are decoded before they appear.
 
 ### Fixed
--
+- Deleted Imgur images showed Imgur's "removed" picture when they came through the forum's image proxy or the userscript manager, and as the medium-size preview; they are now marked dead.
 
 ## [3.0.0] - 2026-11-24
 
