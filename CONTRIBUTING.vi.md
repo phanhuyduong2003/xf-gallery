@@ -2,6 +2,17 @@
 
 English: [CONTRIBUTING.md](CONTRIBUTING.md)
 
+## Cấu trúc mã và cách build
+
+Script được sửa trong `src/` rồi build thành một file duy nhất `xenforo-thread-gallery.user.js`. Đây là file mà tiện ích userscript cài và Greasy Fork đồng bộ. Các phần trong `src/` không phải module: chúng là các đoạn liên tiếp của cùng một hàm, được nối theo thứ tự tên file và dùng chung phạm vi biến (`00-header.js` chứa phần metadata và mở hàm, `24-init.js` đóng hàm).
+
+```
+node build.mjs           # tạo xenforo-thread-gallery.user.js từ src/
+node build.mjs --check   # báo lỗi nếu file đã build chưa khớp với src/
+```
+
+Cần Node 18 trở lên, không cần cài thêm gói nào. Đừng sửa tay `xenforo-thread-gallery.user.js`, vì lần build sau sẽ ghi đè. Commit `src/` cùng với file đã build.
+
 ## Commit message
 
 Dự án dùng quy ước [Conventional Commits 1.0.0](https://www.conventionalcommits.org/vi/v1.0.0/). Commit có cấu trúc giúp lịch sử dễ đọc, khớp thẳng với số phiên bản và [CHANGELOG.vi.md](CHANGELOG.vi.md). Ở dự án này còn một lý do quan trọng hơn: **khi Greasy Fork đồng bộ từ GitHub, commit message sẽ thành changelog công khai** của phiên bản đó.
@@ -86,7 +97,7 @@ Không bắt buộc nhưng nên có. Scope cho biết phần nào của script b
 ## Phát hành
 
 1. Kiểm tra mọi commit ảnh hưởng người dùng kể từ lần phát hành trước đã có trong mục *Chưa phát hành* của `CHANGELOG.md` và `CHANGELOG.vi.md`.
-2. Chuyển các mục đó sang một mục phiên bản mới, ghi ngày hôm nay, và đổi `@version` trong `xenforo-thread-gallery.user.js`:
+2. Chuyển các mục đó sang một mục phiên bản mới, ghi ngày hôm nay, và đổi `@version` trong `src/00-header.js`, rồi chạy `node build.mjs`:
    - có `BREAKING CHANGE` → tăng số lớn (major)
    - nếu không, có `feat` → tăng số giữa (minor)
    - còn lại → tăng số cuối (patch)

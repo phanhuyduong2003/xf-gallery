@@ -23,7 +23,7 @@ Trên Greasy Fork → trang script → **Quản trị** (*Admin*):
 4. **Ngôn ngữ mặc định**: English.
 5. Mở [Thiết lập webhook](https://greasyfork.org/vi/users/webhook-info), sao chép *Payload URL* và *Secret*. Trên GitHub → kho → **Settings → Webhooks → Add webhook**: dán cả hai, *Content type* chọn `application/json`, sự kiện chọn **Just the push event**. Từ đó Greasy Fork cập nhật ngay khi bạn đẩy code, không phải chờ lần kiểm tra định kỳ.
 
-**Phát hành bản cập nhật:** mỗi thay đổi ghi vào [CHANGELOG.vi.md](CHANGELOG.vi.md) (và [CHANGELOG.md](CHANGELOG.md)) ở mục *Chưa phát hành*. Khi phát hành, chuyển các mục đó sang một mục phiên bản mới, đổi `@version` thành đúng số đó (vd `2.0.1`), rồi commit với tóm tắt một dòng như trong [CONTRIBUTING.vi.md](CONTRIBUTING.vi.md). Đẩy lên nhánh `main`: Greasy Fork tự lấy code mới và dùng commit message làm changelog.
+**Phát hành bản cập nhật:** mỗi thay đổi ghi vào [CHANGELOG.vi.md](CHANGELOG.vi.md) (và [CHANGELOG.md](CHANGELOG.md)) ở mục *Chưa phát hành*. Khi phát hành, chuyển các mục đó sang một mục phiên bản mới, đổi `@version` trong `src/00-header.js` thành đúng số đó (vd `2.0.1`) rồi chạy `node build.mjs`, rồi commit với tóm tắt một dòng như trong [CONTRIBUTING.vi.md](CONTRIBUTING.vi.md). Đẩy lên nhánh `main`: Greasy Fork tự lấy code mới và dùng commit message làm changelog.
 
 Nếu đã cài bản cũ "XenForo Album", hãy gỡ nó đi trước khi cài bản mới để không có 2 nút Album. Các tuỳ chọn cũ (chế độ xem, danh sách dịch vụ ảnh) không được chuyển sang.
 

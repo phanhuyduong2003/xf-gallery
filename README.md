@@ -23,7 +23,7 @@ On Greasy Fork → the script → **Admin**:
 4. **Default language**: English.
 5. Open [Set up webhook](https://greasyfork.org/users/webhook-info) and copy the *Payload URL* and *Secret*. On GitHub → the repository → **Settings → Webhooks → Add webhook**: paste both, content type `application/json`, event **Just the push event**. Greasy Fork then updates as soon as you push, instead of on its periodic check.
 
-**Releasing an update:** record each change in [CHANGELOG.md](CHANGELOG.md) under *Unreleased*. When releasing, move those items into a new version section, bump `@version` to the same number (e.g. `2.0.1`), and commit with a one-line summary as described in [CONTRIBUTING.md](CONTRIBUTING.md). Push to `main`: Greasy Fork picks up the new code and uses the commit message as the changelog.
+**Releasing an update:** record each change in [CHANGELOG.md](CHANGELOG.md) under *Unreleased*. When releasing, move those items into a new version section, bump `@version` in `src/00-header.js` to the same number (e.g. `2.0.1`) and run `node build.mjs`, and commit with a one-line summary as described in [CONTRIBUTING.md](CONTRIBUTING.md). Push to `main`: Greasy Fork picks up the new code and uses the commit message as the changelog.
 
 If the old "XenForo Album" script is installed, remove it first, otherwise there will be two Album buttons. Its settings (view mode, image host list) are not carried over.
 

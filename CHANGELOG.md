@@ -6,7 +6,7 @@ All notable changes to **XenForo Thread Gallery** are listed here, newest first.
 
 **When releasing an update:**
 1. Move the items from *Unreleased* into a new version section with today's date.
-2. Bump `@version` in `xenforo-thread-gallery.user.js` to the same number.
+2. Bump `@version` in `src/00-header.js` to the same number and run `node build.mjs`.
 3. Commit with a one-line summary of that version's items (see [CONTRIBUTING.md](CONTRIBUTING.md)) and push to `main`. Greasy Fork syncs the code and shows the commit message as the changelog.
 
 Commit messages and the full release steps: [CONTRIBUTING.md](CONTRIBUTING.md).

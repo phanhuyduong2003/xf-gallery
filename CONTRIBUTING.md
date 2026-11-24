@@ -2,6 +2,17 @@
 
 Tiếng Việt: [CONTRIBUTING.vi.md](CONTRIBUTING.vi.md)
 
+## Code layout and building
+
+The script is edited in `src/` and built into the single file `xenforo-thread-gallery.user.js`, which is what userscript managers install and Greasy Fork syncs. The parts in `src/` are not modules: they are consecutive pieces of one function, joined in file-name order, and share its scope (`00-header.js` holds the metadata block and opens the function, `24-init.js` closes it).
+
+```
+node build.mjs           # write xenforo-thread-gallery.user.js from src/
+node build.mjs --check   # fail if the built file is not up to date
+```
+
+Node 18 or newer, no dependencies. Never edit `xenforo-thread-gallery.user.js` by hand: the next build overwrites it. Commit `src/` and the built file together.
+
 ## Commit messages
 
 This project follows [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/). Structured messages keep the history readable, map directly to version numbers and to [CHANGELOG.md](CHANGELOG.md), and matter here for one more reason: **when Greasy Fork syncs from GitHub, the commit message becomes the public changelog** of that version.
@@ -84,7 +95,7 @@ Optional, but preferred. It names the part of the script that changed:
 ## Releasing
 
 1. Make sure every user-facing commit since the last release is listed under *Unreleased* in `CHANGELOG.md` and `CHANGELOG.vi.md`.
-2. Move those items into a new version section with today's date, and bump `@version` in `xenforo-thread-gallery.user.js`:
+2. Move those items into a new version section with today's date, and bump `@version` in `src/00-header.js`, then run `node build.mjs`:
    - any `BREAKING CHANGE` → major
    - otherwise any `feat` → minor
    - otherwise → patch
