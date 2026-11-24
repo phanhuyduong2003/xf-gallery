@@ -56,7 +56,7 @@ Violentmonkey không hiện hộp thoại này: script khai báo `@connect *` đ
 
 ## Sử dụng
 
-Bấm nút **Album** để mở album dạng modal ngay trên trang (trang diễn đàn vẫn mờ phía sau). Script đọc mọi trang của chủ đề (từng trang một, nghỉ khoảng 1–2 giây giữa các trang để không làm quá tải diễn đàn) và thêm ảnh/video dần theo đúng thứ tự bài viết. Bấm ảnh/video trong bài viết vẫn hoạt động như bình thường của diễn đàn.
+Bấm nút **Album** để mở album dạng modal ngay trên trang (trang diễn đàn vẫn mờ phía sau). Album bắt đầu từ trang đang đọc, tải ngầm các trang xung quanh, rồi tải thêm khi bạn xem tới (xem [Tải trang và bảo vệ tài khoản](#tải-trang-và-bảo-vệ-tài-khoản)). Ảnh/video hiện theo đúng thứ tự bài viết. Bấm ảnh/video trong bài viết vẫn hoạt động như bình thường của diễn đàn.
 
 Trong modal có 3 kiểu xem:
 
@@ -85,7 +85,7 @@ Trong modal có 3 kiểu xem:
 Kiểu xem được ghi nhớ cho lần sau. Các nút khác:
 
 - **Bài gốc ↗ / Nguồn ↗**: mở bài viết chứa mục đang xem, hoặc link gốc của ảnh/video.
-- **Dừng tải**: dừng giữa chừng với chủ đề quá dài. Nút chỉ hiện khi đang tải.
+- **Dừng tải**: bỏ các trang còn đang chờ tải. Nút chỉ hiện khi đang tải.
 - **Thông tin người đăng (kiểu Reels)**, trên cả ảnh lẫn video:
   - Góc trên trái luôn hiện nhãn **Tác giả chủ đề** (chủ thớt, màu xanh) hoặc **Thành viên**.
   - Phần thông tin ở mép dưới gồm ảnh đại diện, tên, ngày đăng, vị trí của mục trong bài ("2/5 trong bài") và nội dung (gọn 2 dòng, *Xem thêm* để đọc hết), trên lớp phủ mờ nhạt để không che nhiều.
@@ -105,13 +105,40 @@ Kiểu xem được ghi nhớ cho lần sau. Các nút khác:
   - *Tải lại chủ đề này (bỏ qua bộ nhớ đệm)*: tải lại mọi trang và mọi link, dùng khi bài ở các trang cũ đã bị sửa hoặc xoá.
 - Đóng modal: nút ✕, phím Esc, hoặc bấm ra vùng tối bên ngoài. Mở lại sẽ quay về đúng chỗ đang xem, không phải tải lại.
 
+### Tải trang và bảo vệ tài khoản
+
+Mỗi trang script tải là một yêu cầu gửi tới diễn đàn. Tải liền hàng trăm trang dễ bị coi là bot, và diễn đàn có thể đáp lại bằng captcha, chặn tạm thời, thậm chí khoá tài khoản. Vì vậy script chỉ tải những gì bạn sắp xem, và rất dè dặt với phần còn lại.
+
+**Chế độ tải** (*Tuỳ chọn → Tải trang*, nhớ riêng cho từng diễn đàn):
+
+| Chế độ | Tải những gì |
+|---|---|
+| **Tiết kiệm** | Chỉ trang đang đọc. Trang kế tiếp được tải khi bạn xem tới mép (mục tiếp theo, đầu / cuối, hoặc bấm vào ô chưa tải). |
+| **Cân bằng** (mặc định) | Trang đang đọc và 2 trang mỗi bên. Cửa sổ này đi theo bạn khi xem. |
+| **Toàn bộ chủ đề** | Mọi trang. Trên 50 trang thì hỏi trước, kèm thời gian ước tính. |
+
+- Các trang chưa tải hiện thành ô viền đứt **"Tr. 4–8 · chưa tải"** trong dải ảnh và trong lưới; bấm vào để tải trang gần nhất và nhảy tới đó. Trang lỗi hiện **"lỗi, bấm để thử lại"**.
+- Tiếp / trước, đầu / cuối và tự động phát vẫn chạy qua được các trang chưa tải: script tải trang đó rồi mới chuyển (giữa màn hình hiện "Đang tải trang 9…").
+- Ở kiểu xem Lưới và Cuộn (trừ chế độ Tiết kiệm), cuộn xuống tới ô chưa tải sẽ tải trang tiếp theo, như danh sách cuộn vô tận.
+
+**Cách giãn yêu cầu:**
+
+- Mỗi diễn đàn chỉ một yêu cầu trang tại một thời điểm, **cách nhau khoảng 5 giây** (± 1 giây ngẫu nhiên), dùng chung cho mọi tab đang mở diễn đàn đó. Khoảng cách tự gấp đôi (tối đa 60 giây) khi diễn đàn chậm hoặc lỗi, rồi giảm dần lại.
+- Tối đa **40 trang trong 10 phút**; sau đó tạm dừng cho tới khi bạn bấm **Tiếp tục**.
+- Nếu diễn đàn hiện **captcha / kiểm tra bảo mật** (hoặc trả lỗi 403 / 503), việc tải dừng ở mọi tab và không tự thử lại. Mở chủ đề trong tab thường, xác minh xong rồi bấm **Tiếp tục**. Nếu không, việc tải dừng 15 phút.
+- Nếu diễn đàn trả **429 Too Many Requests**, script đợi đúng thời gian diễn đàn yêu cầu, lần sau đợi gấp đôi, và dừng hẳn ở lần thứ ba liên tiếp.
+- Không tải gì khi tab đang ở chế độ nền hoặc album đang đóng.
+- Trang đã có thì không bao giờ tải lại (xem bộ nhớ đệm bên dưới), và trang đang đọc không tốn yêu cầu nào.
+
+Dòng trạng thái dưới bộ đếm cho biết script đang làm gì: số trang đã tải ("12/500 trang"), "đang chờ (giãn cách yêu cầu)", "đang tải trang 9", "đã dừng".
+
 ### Bộ nhớ đệm và chuyển trang
 
 Chuyển từ trang 1 sang trang 2 của chủ đề là tải lại cả trang web, nên script khởi động lại từ đầu. Để không phải tải lại cả chủ đề mỗi lần như vậy, script lưu bộ nhớ đệm trong trình duyệt (IndexedDB, chỉ nằm trên máy bạn):
 
 | Dữ liệu | Giữ trong |
 |---|---|
-| Ảnh/video và thông tin người đăng của từng trang | 12 giờ |
+| Ảnh/video và thông tin người đăng của từng trang | 7 ngày (3 trang cuối của chủ đề: 1 giờ, vì bài mới nằm ở đó) |
 | Kết quả lấy file thật từ link dịch vụ ảnh | 7 ngày (link hỏng: 1 ngày) |
 | Ảnh thu nhỏ video do script tìm được | 7 ngày |
 | Mục bạn đang xem | 12 giờ |
@@ -120,7 +147,7 @@ Khi mở album:
 
 - Trang đang đọc được đọc thẳng từ trang web: không tốn yêu cầu nào, luôn mới nhất.
 - Các trang khác lấy từ bộ nhớ đệm nếu còn mới; dòng trạng thái cho biết bao nhiêu trang ("3 trang từ bộ nhớ đệm").
-- Trang cuối luôn được tải lại vì bài mới nằm ở đó. Trang mới phát sinh cũng được tải.
+- Các trang cuối được tải lại sau một giờ, vì bài mới nằm ở đó.
 - Chỉ những link chưa có trong bộ nhớ đệm mới phải hỏi dịch vụ ảnh.
 - Album mở ở **ảnh/video đầu tiên của trang đang đọc**. Nếu trước đó bạn đang xem dở một mục thuộc trang này, album mở đúng mục đó.
 
@@ -161,6 +188,7 @@ Icon trong giao diện lấy từ [Lucide](https://lucide.dev) (giấy phép ISC
 - Ảnh đã bị xoá ở nơi lưu thì không lấy lại được, chỉ ẩn đi.
 - Với trình phát nhúng dạng iframe (YouTube…), script không biết video còn hay đã bị xoá.
 - Dịch vụ bắt giải captcha / Cloudflare thì sẽ báo "không tải được"; bấm **nguồn ↗** để mở tay.
+- Script không giải captcha của diễn đàn hộ bạn (cố ý như vậy): script dừng lại và chờ bạn xác minh trong tab thường.
 
 ## Ủng hộ
 

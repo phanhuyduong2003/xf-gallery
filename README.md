@@ -56,7 +56,7 @@ Violentmonkey does not show this dialog: scripts that declare `@connect *` may c
 
 ## Usage
 
-Click **Album** to open the gallery as a modal on top of the page (the forum stays dimmed behind it). The script reads every page of the thread (one page at a time, pausing about 1–2 seconds between pages so the forum is not overloaded) and adds images and videos in thread order as they load. Clicking images and videos inside posts keeps the forum's normal behaviour.
+Click **Album** to open the gallery as a modal on top of the page (the forum stays dimmed behind it). It starts with the page you are reading and loads the pages around it in the background, then more pages as you browse (see [Loading pages](#loading-pages-and-protecting-your-account)). Images and videos appear in thread order. Clicking images and videos inside posts keeps the forum's normal behaviour.
 
 The modal has 3 views:
 
@@ -85,7 +85,7 @@ The modal has 3 views:
 The view is remembered. Other controls:
 
 - **Post ↗ / Source ↗**: open the post that contains the current item, or the item's original link.
-- **Stop**: stop loading a very long thread midway. Only shown while loading.
+- **Stop**: stop the pages still queued. Only shown while loading.
 - **Poster info (Reels-style)**, on both images and videos:
   - The top-left corner always shows a **Thread starter** (blue) or **Member** tag.
   - The bottom overlay shows the poster's avatar, name, post date, the item's position in its post ("2 of 5 in this post") and its text (2 lines, *Show more* reads it all). It sits on a light overlay so the media is not covered much.
@@ -107,13 +107,40 @@ The view is remembered. Other controls:
 
 Settings (view, mute, label options, host list) are stored per forum.
 
+### Loading pages and protecting your account
+
+Every page the script loads is a request to the forum. Loading hundreds of pages in a row can look like a bot, and forums answer with a captcha, a temporary ban or even a locked account. So the script only loads what you are about to see, and is careful with the rest.
+
+**Loading modes** (*Options → Loading pages*, remembered per forum):
+
+| Mode | What loads |
+|---|---|
+| **Saver** | Only the page you are reading. The next page loads when you reach its edge (next item, first / last, or a click on a not-loaded block). |
+| **Balanced** (default) | The page you are reading and 2 pages on each side. The window follows you as you browse. |
+| **Whole thread** | Every page. Above 50 pages it asks first, with an estimate of the time it takes. |
+
+- Pages not loaded yet show as a dashed **"p. 4–8 · not loaded"** block in the filmstrip and the grid; click it to load the nearest page and jump there. Failed pages show **"failed, click to retry"**.
+- Next / previous, first / last and autoplay keep working across pages that are not loaded: the script loads the page, then moves (the stage shows "Loading page 9…").
+- In Grid and Scroll views (except Saver), scrolling down to the not-loaded block loads the next page, like an endless list.
+
+**How requests are paced:**
+
+- One page request at a time per forum, **about 5 seconds apart** (± 1 s at random), shared by every tab open on that forum. The gap doubles (up to 60 s) when the forum is slow or failing, and shrinks back slowly.
+- At most **40 pages in 10 minutes**; then loading pauses until you press **Continue**.
+- If the forum shows a **captcha / security check** (or answers 403 / 503), loading stops in every tab, with no retry. Open the thread in a normal tab, complete the check, then press **Continue**. Otherwise loading stays stopped for 15 minutes.
+- If the forum answers **429 Too Many Requests**, the script waits as long as the forum asks, twice as long the next time, and stops completely on the third time in a row.
+- Nothing loads while the tab is in the background or the gallery is closed.
+- Pages you already have are never requested again (see the cache below), and the page you are reading costs no request at all.
+
+The status line below the counter says what is happening: pages loaded ("12/500 pages"), "waiting (spacing requests)", "loading page 9", "paused".
+
 ### Cache and moving between pages
 
 Moving from page 1 to page 2 of a thread reloads the whole web page, so the script starts again. To avoid re-downloading the thread every time, it keeps a cache in the browser (IndexedDB, on your computer only):
 
 | Data | Kept for |
 |---|---|
-| Media and poster info of each thread page | 12 hours |
+| Media and poster info of each thread page | 7 days (the last 3 pages of the thread: 1 hour, since new posts land there) |
 | What an image-host link resolved to | 7 days (broken links: 1 day) |
 | Video thumbnails found by the script | 7 days |
 | The item you were viewing | 12 hours |
@@ -122,7 +149,7 @@ When you open the gallery:
 
 - The page you are reading is read straight from the web page: no request, always up to date.
 - Other pages come from the cache when it is recent enough; the status shows how many ("3 pages from cache").
-- The last page is always fetched again, because new posts land there. New pages are fetched too.
+- The last pages are fetched again after an hour, because new posts land there.
 - Only links that are not in the cache are looked up on image hosts.
 - The gallery opens on the **first item of the page you are reading**. If you were viewing an item on that page earlier, it opens on that item instead.
 
@@ -163,6 +190,7 @@ Icons come from [Lucide](https://lucide.dev) (ISC license) and are inlined as SV
 - Media deleted from its host cannot be recovered; it is only hidden.
 - For embedded players (YouTube…), the script cannot tell whether the video still exists.
 - Hosts behind a captcha / Cloudflare challenge are reported as failed to load; click **Source ↗** to open them manually.
+- The script cannot solve a forum's captcha for you (on purpose): it stops and waits for you to do it in a normal tab.
 
 ## Support
 

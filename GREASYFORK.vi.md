@@ -6,7 +6,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
 
 ## Tính năng
 
-- **Cả chủ đề, mọi trang.** Bấm nút **Album** trên trang chủ đề bất kỳ. Script tải ngầm các trang (từng trang một, nghỉ một chút giữa các trang để không làm quá tải diễn đàn) và hiện ảnh/video theo đúng thứ tự bài viết trong lúc tải.
+- **Cả chủ đề, mọi trang, không lo bị khoá tài khoản.** Bấm nút **Album** trên trang chủ đề bất kỳ. Album bắt đầu từ trang đang đọc, tải các trang xung quanh rồi tải thêm khi bạn xem tới; trang chưa tải hiện thành ô có thể bấm. Yêu cầu được giãn như người thật đang đọc: khoảng 5 giây một trang, dùng chung cho mọi tab, tối đa 40 trang mỗi 10 phút, không tải khi tab ở chế độ nền. Nếu diễn đàn hiện captcha hoặc yêu cầu giảm tốc, việc tải dừng ở mọi tab thay vì cố thử lại. Chế độ: **Tiết kiệm**, **Cân bằng** (mặc định), **Toàn bộ chủ đề**.
 - **Mở tab mới:** icon ↗ nhỏ sau tiêu đề mỗi chủ đề trong danh sách chủ đề.
 - **Bộ lọc** tất cả / ảnh / video, cho biết ảnh thuộc trang nào, vạch chia trang trong dải ảnh, về mục đầu / cuối.
 - **3 kiểu xem**
@@ -22,7 +22,7 @@ Các chủ đề XenForo dài thường giấu ảnh và video giữa hàng ch�
   - Dịch vụ khác do bạn thêm vào danh sách: script đọc thẻ `og:image` / `og:video` của trang.
 - **Bỏ qua ảnh/video đã chết.** Link hỏng, lỗi 404 và ảnh giữ chỗ "đã bị xoá" được ẩn đi (có thể bật lại trong tuỳ chọn). Ảnh bị chặn hotlink được tải qua trình quản lý userscript. Lỗi mạng chập chờn được thử lại một lần.
 - **Không trùng lặp.** Ảnh bị trích dẫn lại ở các bài sau chỉ hiện một lần.
-- **Có bộ nhớ đệm, mở đúng chỗ đang đọc.** Các trang và kết quả link được lưu trong trình duyệt, nên chuyển từ trang 1 sang trang 2 không phải tải lại cả chủ đề: chỉ tải lại trang cuối. Album mở ở ảnh/video đầu tiên của trang đang đọc (hoặc mục đang xem dở trên trang đó).
+- **Có bộ nhớ đệm, mở đúng chỗ đang đọc.** Các trang và kết quả link được lưu trong trình duyệt, nên chuyển từ trang 1 sang trang 2 không phải tải lại cả chủ đề: trang cũ giữ một tuần, các trang cuối giữ một giờ. Album mở ở ảnh/video đầu tiên của trang đang đọc (hoặc mục đang xem dở trên trang đó).
 - **Trình phát video kiểu Reels**
   - Bình thường chỉ hiện thanh tiến trình mảnh, không che video.
   - Máy tính: di chuột vào video để hiện thông tin người đăng và nút điều khiển.

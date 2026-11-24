@@ -6,7 +6,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
 
 ## Features
 
-- **Whole thread, every page.** Click the **Album** button on any thread page. Pages are fetched in the background (one page at a time, with a short pause between pages so the forum is not overloaded) and media appears in thread order as it loads.
+- **Whole thread, every page, without getting you banned.** Click the **Album** button on any thread page. It starts with the page you are reading and loads the pages around it, then more as you browse; pages not loaded yet show as a block you can click. Requests are paced like a person browsing: one page about every 5 seconds, shared by all your tabs, at most 40 pages per 10 minutes, nothing while the tab is in the background. If the forum shows a captcha or asks to slow down, loading stops in every tab instead of retrying. Modes: **Saver**, **Balanced** (default), **Whole thread**.
 - **Open in new tab:** a small ↗ icon after each thread title in thread lists.
 - **Filter** all / images / videos, page indicator and page dividers in the filmstrip, jump to first / last.
 - **Three views**
@@ -22,7 +22,7 @@ Long XenForo threads often hide their images and videos between pages of text, a
   - Any other host you add: the script reads the page's `og:image` / `og:video`.
 - **Skips dead media.** Broken links, 404s and "image removed" placeholders are hidden (you can show them from the options). Hotlink-protected images are fetched through the userscript manager. Transient network errors are retried once.
 - **No duplicates.** Images quoted again later only appear once.
-- **Cached, and opens where you are reading.** Pages and resolved links are cached in the browser, so moving from page 1 to page 2 does not re-download the thread: only the last page is fetched again. The gallery opens on the first item of the page you are reading (or the item you were viewing on it).
+- **Cached, and opens where you are reading.** Pages and resolved links are cached in the browser, so moving from page 1 to page 2 does not re-download the thread: old pages are kept for a week, the last pages for an hour. The gallery opens on the first item of the page you are reading (or the item you were viewing on it).
 - **Reels-style video player**
   - Shows a slim progress bar only, so it doesn't cover the video.
   - Desktop: hover the video to reveal poster info and controls.

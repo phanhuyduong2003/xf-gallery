@@ -16,10 +16,13 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 ## [Chưa phát hành]
 
 ### Thêm
--
+- Chế độ tải trong *Tuỳ chọn → Tải trang*: **Tiết kiệm** (chỉ trang đang đọc, trang kế tiếp khi xem tới), **Cân bằng** (mặc định: 2 trang mỗi bên, đi theo khi bạn xem) và **Toàn bộ chủ đề** (hỏi trước nếu trên 50 trang).
+- Trang chưa tải hiện thành ô "Tr. 4–8 · chưa tải" trong dải ảnh và trong lưới; bấm vào để tải trang gần nhất và nhảy tới đó. Tiếp / trước, đầu / cuối và tự động phát tự tải trang cần thiết rồi mới chuyển. Lưới và Cuộn tải trang tiếp khi cuộn tới cuối.
+- Thanh thông báo cho biết vì sao việc tải tạm dừng (captcha, "giảm tốc", giới hạn 40 trang) kèm nút **Tiếp tục** / **Mở chủ đề**.
 
 ### Thay đổi
--
+- **Album không còn tải cả chủ đề theo mặc định.** Yêu cầu tải trang được giãn như người thật đang đọc để tránh captcha và khoá tài khoản: mỗi diễn đàn một yêu cầu tại một thời điểm, dùng chung mọi tab, cách nhau khoảng 5 giây (lâu hơn khi diễn đàn chậm), tối đa 40 trang mỗi 10 phút, không tải khi tab ẩn hoặc album đóng. Captcha / kiểm tra bảo mật hoặc lỗi 403 / 503 dừng tải ở mọi tab và không tự thử lại; lỗi 429 thì đợi đúng thời gian diễn đàn yêu cầu, lâu dần mỗi lần, và dừng ở lần thứ ba.
+- Trang chủ đề trong bộ nhớ đệm được giữ 7 ngày (3 trang cuối: 1 giờ) thay vì 12 giờ, nên chuyển trang tốn ít yêu cầu hơn.
 
 ### Sửa lỗi
 -
