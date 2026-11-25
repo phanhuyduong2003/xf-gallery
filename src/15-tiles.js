@@ -42,14 +42,12 @@
       if (item.thumb) {
         const img = el('img', { loading: 'lazy', alt: '', referrerPolicy: 'no-referrer', src: item.thumb });
         img.onerror = () => {
-          img.replaceWith(el('div', { className: 'xtg-ph', innerHTML: ic('play', 30, true) }));
+          img.replaceWith(item.type === 'video' ? frameCanvas(item) : el('div', { className: 'xtg-ph', innerHTML: ic('play', 30, true) }));
           ensureThumb(item, img.src);
         };
         t.appendChild(img);
       } else if (item.type === 'video') {
-        const v = mediaEl('video', { muted: true, preload: 'metadata' });
-        thumbVideo(v, item, () => videoFail(item));
-        t.appendChild(v);
+        t.appendChild(frameCanvas(item));
       } else {
         t.innerHTML = `<div class="xtg-ph">${ic('play', 30, true)}${esc(hostOf(item.url))}</div>`;
       }
@@ -87,8 +85,18 @@
     return listVideoObs;
   }
 
+  // A tile going away lets go of its video (connection, buffer, decoder) at once, not whenever it is garbage
+  // collected, and the scroll view's observer stops holding on to it
+  function dropTile(node) {
+    node.querySelectorAll('video').forEach((v) => {
+      if (listVideoObs) listVideoObs.unobserve(v);
+      killVideo(v);
+    });
+  }
+
   function replaceTile(item) {
     const fresh = buildTile(item);
+    dropTile(item.el);
     item.el.replaceWith(fresh);
     item.el = fresh;
   }
@@ -210,12 +218,13 @@
     } else {
       if (item.thumb) {
         const img = el('img', { loading: 'lazy', alt: '', referrerPolicy: 'no-referrer', src: item.thumb });
-        img.onerror = () => { img.remove(); ensureThumb(item, img.src); };
+        img.onerror = () => {
+          if (item.type === 'video') img.replaceWith(frameCanvas(item)); else img.remove();
+          ensureThumb(item, img.src);
+        };
         th.appendChild(img);
       } else if (item.type === 'video') {
-        const v = mediaEl('video', { muted: true, preload: 'metadata' });
-        thumbVideo(v, item, () => v.remove());
-        th.appendChild(v);
+        th.appendChild(frameCanvas(item));
       }
       th.insertAdjacentHTML('beforeend', `<span>${ic('play', 18, true)}</span>`);
     }

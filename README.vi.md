@@ -155,7 +155,7 @@ Host video (Streamable, RedGifs…) không phải diễn đàn: yêu cầu tới
 - **Đua tới khung hình đầu:** nếu bản chất lượng đầy đủ sau 1,5 giây vẫn chưa có hình, bản nhẹ được tải song song; bản nào lên hình trước thì giữ, bản kia bị huỷ. Host thua cuộc đua được ghi nhớ là chậm.
 - **Chuẩn bị sẵn video kế tiếp:** khi mục hiện tại đã hiện, video kế tiếp bắt đầu tải ngầm và được đưa lên màn hình khi bạn tới, nên phát gần như ngay. Chỉ một video, chỉ phần đầu, huỷ khi bạn chuyển đi chỗ khác, không chạy khi bật tiết kiệm dữ liệu.
 - **Tải song song clip ngắn ở host chậm:** clip tới 30 MB trên host đã biết là chậm được tải thành 3 phần cùng lúc (có ích khi host giới hạn tốc độ từng kết nối), rồi mới phát.
-- **Ưu tiên video đang xem:** ảnh bìa dạng video (khi không có ảnh bìa sẵn) tải từng cái một, chỉ sau khi video đang xem đã lên hình. Rời một video thì video đó ngừng tải.
+- **Ưu tiên video đang xem:** ảnh bìa dạng video (khi không có ảnh bìa sẵn) tải từng cái một, chỉ sau khi video đang xem đã lên hình, và mỗi file được đóng ngay khi đã vẽ xong khung hình. Rời một video thì video đó ngừng tải.
 - **Mở kết nối sớm:** kết nối tới host của mục kế tiếp (video và trình phát nhúng) được mở trước.
 - **Giới hạn:** host trả lỗi 403 / 429 / 503 sẽ không bị đua hay tải song song trong 30 phút, chỉ phát bình thường. Video tải thẳng lên diễn đàn (tệp đính kèm, proxy của diễn đàn) không bao giờ được chuẩn bị trước, đua hay tải song song.
 
@@ -197,12 +197,13 @@ Bộ nhớ đệm giữ 30 chủ đề xem gần nhất và tự xoá mục hế
 
 ### Ảnh thu nhỏ cho video
 
-Video nào chưa có sẵn ảnh thu nhỏ thì script tự tìm theo thứ tự, và cập nhật ô video ngay khi tìm được:
+Với video chưa có sẵn ảnh thu nhỏ:
 
-1. Video là file trực tiếp (`.mp4`, `.webm`…): chụp một khung hình ở khoảng giây thứ 1,5. Chỉ chụp được khi video nằm trên chính diễn đàn hoặc máy chủ video cho phép.
+1. Video là file trực tiếp (`.mp4`, `.webm`…): khi ô video hoặc ảnh nhỏ của nó ở dải phim sắp hiện trên màn hình, script mở file, vẽ khung hình ở giây thứ 1 (thay vì khung đầu, thường đen) rồi đóng file ngay. Mỗi lần một video, bản nhẹ trước, và chỉ khi video đang xem đã tải đủ trước. Ô lưới và dải phim dùng chung khung hình đó, nên không video nào bị để mở chỉ để hiện một ảnh đứng yên. Nếu video nằm trên chính diễn đàn hoặc máy chủ video cho phép (CORS), khung hình còn được lưu lại, lần sau mở chủ đề sẽ hiện ngay mà không phải mở video.
 2. Vimeo, Streamable, TikTok: hỏi ảnh đại diện qua oEmbed. RedGifs: hỏi qua API của RedGifs.
 3. Dịch vụ khác: đọc thẻ `og:image` của trang gốc.
-4. Không lấy được bằng cách nào ở trên: ô video hiện khung hình ở giây thứ 1 thay vì khung đầu (thường đen).
+
+Ảnh tìm được ở bước 2–3 sẽ thay cho khung hình đã vẽ.
 
 Nếu ảnh thu nhỏ có sẵn bị hỏng, script cũng thử lại các bước trên.
 

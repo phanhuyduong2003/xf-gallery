@@ -95,7 +95,7 @@
     const after = S.items.slice(lo + 1);
     const wasOn = !!(item.thumbEl && item.thumbEl.classList.contains('on'));
     const fresh = buildTile(item);
-    if (item.el) item.el.remove();
+    if (item.el) { dropTile(item.el); item.el.remove(); }
     item.el = fresh;
     const nextTile = after.find((i) => i.el);
     ui.grid.insertBefore(item.el, nextTile ? nextTile.el : null);

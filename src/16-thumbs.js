@@ -29,38 +29,6 @@
     return urls.poster || urls.thumbnail || null;
   }
 
-  // Grab one frame as a JPEG (only works for same-origin videos or servers that allow CORS)
-  function captureFrame(url) {
-    return new Promise((resolve) => {
-      const x = abs(url);
-      if (!x) { resolve(null); return; }
-      // metadata only: the seek below asks for just the part around that frame, not the start of the whole file
-      const v = mediaEl('video', { muted: true, preload: 'metadata' });
-      let done = false;
-      const finish = (res) => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        v.removeAttribute('src');
-        try { v.load(); } catch (e) { /* ignore */ }
-        resolve(res);
-      };
-      const timer = setTimeout(() => finish(null), 15000);
-      if (x.origin !== location.origin) v.crossOrigin = 'anonymous';
-      v.onloadedmetadata = () => { v.currentTime = Math.min(1.5, (v.duration || 10) * 0.1); };
-      v.onseeked = () => {
-        try {
-          const w = Math.min(480, v.videoWidth || 480);
-          const c = el('canvas', { width: w, height: Math.round(((v.videoHeight || 270) * w) / (v.videoWidth || 480)) });
-          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-          finish(c.toDataURL('image/jpeg', 0.75));
-        } catch (e) { finish(null); } // tainted canvas (no CORS)
-      };
-      v.onerror = () => finish(null);
-      v.src = x.href;
-    });
-  }
-
   const OEMBED = [
     [/vimeo\.com\/(?:video\/)?(\d+)/, (id) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent('https://vimeo.com/' + id)}`],
     [/streamable\.com\/(?:[eos]\/)?(\w{4,})/, (id) => `https://api.streamable.com/oembed.json?url=${encodeURIComponent('https://streamable.com/' + id)}`],
@@ -72,11 +40,7 @@
     const ok = (x) => (x && x !== failed ? x : null);
     let t, m;
     try {
-      if (item.type === 'video') {
-        // the lighter version first, and only once the video being watched has buffered enough
-        while (mainVideoBusy()) await sleep(300);
-        for (const c of uniq([item.sd, ...item.candidates])) if ((t = ok(await captureFrame(c)))) return t;
-      }
+      // (a frame of the video itself is drawn by videoFrame, when a thumbnail of it comes into view)
       for (const [re, endpoint] of OEMBED) {
         if ((m = text.match(re)) && (t = ok(await oembedThumb(endpoint(m[1]))))) return t;
       }
@@ -91,14 +55,16 @@
     if (item.thumbBusy || (item.thumbTries || 0) >= 2) return;
     item.thumbBusy = true;
     item.thumbTries = (item.thumbTries || 0) + 1;
-    (async () => {
-      const key = 't:' + item.key;
-      const hit = !failed && !S.noCache && await cache.get(key, THUMB_TTL);
-      if (hit) return hit.thumb;
+    const key = 't:' + item.key;
+    // videoFrame waits for this, so a thumbnail saved on an earlier visit spares opening the video
+    item.thumbCached = failed || S.noCache ? Promise.resolve(null)
+      : cache.get(key, THUMB_TTL).then((hit) => (hit && hit.thumb) || null, () => null);
+    item.thumbCached.then(async (hit) => {
+      if (hit) return hit;
       const t = await thumbQueue(() => findThumb(item, failed));
       if (t) cache.put(key, { thumb: t });
       return t;
-    })().then((t) => {
+    }).then((t) => {
       if (t && t !== item.thumb && !item.dead) {
         item.thumb = t;
         replaceTile(item);

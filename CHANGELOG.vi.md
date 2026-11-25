@@ -19,7 +19,7 @@ Cách đánh số: `2.0.1` cho sửa lỗi, `2.1.0` cho tính năng mới, `3.0.
 -
 
 ### Thay đổi
--
+- Chủ đề có nhiều video không có ảnh bìa nhẹ hơn hẳn: mỗi video như vậy chỉ được mở để vẽ một khung hình cho ô lưới và ảnh nhỏ ở dải phim rồi đóng ngay, từng cái một và chỉ khi sắp hiện trên màn hình. Trước đây video nào cũng bị để mở cả ở lưới (kể cả khi lưới đang ẩn) lẫn dải phim, nên một trang 10 video giữ khoảng 20 trình phát cùng giải mã, có thể làm quá tải RAM và CPU. Khung hình của video trên chính diễn đàn hoặc host cho phép được lưu lại, lần sau mở chủ đề không phải mở video nữa.
 
 ### Sửa lỗi
 -

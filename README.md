@@ -157,7 +157,7 @@ Video hosts (Streamable, RedGifs…) are not the forum: requests to them never c
 - **Race to the first frame:** if the full-quality file shows nothing after 1.5 s, the lighter version starts alongside it; whichever shows a frame first is kept and the other is cancelled. A host that loses the race is remembered as slow.
 - **Next video prepared:** once the current item shows, the next video starts buffering in the background and is moved onto the screen when you get there, so it plays almost at once. Only one video, only its beginning, cancelled when you go elsewhere, not with data saver on.
 - **Parallel download for short clips on slow hosts:** clips up to 30 MB on a host known to be slow are downloaded in 3 parts at once (helps when the host limits each connection), then played.
-- **Watched video first:** video thumbnails without a poster load one at a time, only after the video you are watching shows a frame. Leaving a video stops its download.
+- **Watched video first:** video thumbnails without a poster load one at a time, only after the video you are watching shows a frame, and each file is closed as soon as its frame is drawn. Leaving a video stops its download.
 - **Connection opened early:** the connection to the next item's host (videos and embedded players) is opened in advance.
 - **Limits:** a host answering 403 / 429 / 503 gets no races or parallel downloads for 30 minutes, only normal playback. Videos uploaded to the forum itself (attachments, the forum's proxy) are never prepared ahead, raced or downloaded in parts.
 
@@ -199,12 +199,13 @@ The cache keeps the 30 most recently viewed threads and clears expired entries o
 
 ### Video thumbnails
 
-For videos without a thumbnail, the script tries the following in order and updates the tile as soon as one works:
+For videos without a thumbnail:
 
-1. Direct video files (`.mp4`, `.webm`…): capture a frame at around 1.5 seconds. Only possible when the video is on the forum itself or the video server allows it (CORS).
+1. Direct video files (`.mp4`, `.webm`…): when the tile or its filmstrip thumbnail comes near the screen, the script opens the file, draws the frame at 1 second (instead of the often black first frame) and closes the file right away. One video at a time, the lighter version first, and only once the video you are watching has buffered enough. The tile and the filmstrip share that one frame, so a video is never left open just to show a still picture. When the video is on the forum itself or its server allows it (CORS), the frame is also saved, and the next visit shows it without opening the video.
 2. Vimeo, Streamable, TikTok: ask oEmbed for the thumbnail. RedGifs: ask the RedGifs API.
 3. Other hosts: read the source page's `og:image` tag.
-4. If all of the above fail: the tile shows the frame at 1 second instead of the (often black) first frame.
+
+A thumbnail found in steps 2–3 replaces the drawn frame.
 
 If an existing thumbnail is broken, the script also runs these steps.
 

@@ -1511,12 +1511,12 @@
   border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:xtg-spin .8s linear infinite;pointer-events:none}
 @keyframes xtg-spin{to{transform:rotate(360deg)}}
 .xtg-th.on{opacity:1;outline-color:#1f6feb}
-.xtg-th img,.xtg-th video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.xtg-th img,.xtg-th video,.xtg-th canvas{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .xtg-th span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 3px #000}
 .xtg-scroll{position:absolute;inset:0;overflow:auto;scrollbar-color:#3a3d44 transparent;padding:12px 14px 30px}
 .xtg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px}
 .xtg-tile{position:relative;aspect-ratio:1;background:#1b1d21;border-radius:5px;overflow:hidden;cursor:pointer}
-.xtg-tile img,.xtg-tile video{width:100%;height:100%;object-fit:cover;display:block}
+.xtg-tile img,.xtg-tile video,.xtg-tile canvas{width:100%;height:100%;object-fit:cover;display:block}
 .xtg-badge{display:inline-flex;align-items:center;gap:4px;position:absolute;top:6px;left:6px;background:rgba(0,0,0,.7);color:#fff;
   border-radius:4px;padding:2px 6px;font-size:12px;pointer-events:none}
 .xtg-ph{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
@@ -2101,7 +2101,7 @@ a.xtg-name:hover{text-decoration:underline}
     const after = S.items.slice(lo + 1);
     const wasOn = !!(item.thumbEl && item.thumbEl.classList.contains('on'));
     const fresh = buildTile(item);
-    if (item.el) item.el.remove();
+    if (item.el) { dropTile(item.el); item.el.remove(); }
     item.el = fresh;
     const nextTile = after.find((i) => i.el);
     ui.grid.insertBefore(item.el, nextTile ? nextTile.el : null);
@@ -2434,7 +2434,9 @@ a.xtg-name:hover{text-decoration:underline}
   //     stage when you get there; not on data saver, never for the forum's files;
   //   - the video being watched always plays as it downloads, like opening its link, and has the connection to
   //     itself until it is VIDEO_AHEAD_S ahead (see curBuffered): the next video, video thumbnails and image
-  //     preloads wait until then instead of taking bandwidth from it.
+  //     preloads wait until then instead of taking bandwidth from it;
+  //   - a video without a poster gets one frame drawn on a canvas for its thumbnails (see videoFrame), never a
+  //     <video> left open in a tile.
   // ---------------------------------------------------------------------------
   const VIDEO_SLOW_MS = 3000;                 // slower than this to the first frame: the host counts as slow
   const VIDEO_RACE_MS = 1500;                 // head start of the chosen file before the lighter one may race it
@@ -2483,21 +2485,25 @@ a.xtg-name:hover{text-decoration:underline}
     try { v.load(); } catch (e) { /* ignore */ }
   };
 
-  // frag '#t=1' makes thumbnails show the frame at 1 s instead of the (often black) first frame.
-  // Thumbnails prefer the lighter version. v._xtgFail can be swapped when a prepared element changes owner.
-  function loadVideo(v, item, onFail, frag = '', urls = null) {
+  // v._xtgFail can be swapped when a prepared element changes owner.
+  function loadVideo(v, item, onFail, urls = null) {
     let i = 0;
-    urls = urls || (frag ? (item.sd ? uniq([item.sd, ...item.candidates]) : item.candidates) : videoUrls(item));
+    urls = urls || videoUrls(item);
     v._xtgFail = onFail;
     const tryNext = () => {
-      if (i < urls.length) { v._xtgUrl = urls[i++]; v.src = v._xtgUrl + frag; } else v._xtgFail();
+      if (i < urls.length) { v._xtgUrl = urls[i++]; v.src = v._xtgUrl; } else v._xtgFail();
     };
     v.onerror = tryNext;
     tryNext();
   }
 
-  // Video thumbnails without a poster load one at a time, and only once the video being watched has buffered
-  // enough (also while the opening item is not picked yet, which takes up to 1.5 s)
+  // Thumbnails of videos without a poster: one frame is drawn on a small canvas and the file is closed at once
+  // (a <video> left in a tile keeps its decoder, buffer and connection, so ten of them could choke the machine).
+  // The frame is grabbed once per item, shared by its tile and filmstrip thumbnail, only when one of them is
+  // near the screen, one video at a time, and only once the video being watched has buffered enough (also while
+  // the opening item is not picked yet, which takes up to 1.5 s). The lighter version is tried first.
+  const FRAME_W = 360;            // px, wide enough for a grid tile on a high-density screen
+  const FRAME_TIMEOUT_MS = 12000; // a file that shows no frame by then is closed (the canvas stays blank)
   const thumbVideoQueue = makeQueue(1);
   const mainVideoBusy = () => ui && !ui.root.hidden && S.view === 'viewer' && (!S.cur ? S.items.length > 0 : S.cur.type === 'video' && !S.curBuffered);
   // Run fn once the video being watched has buffered enough (at once for anything else), unless the user moved on
@@ -2506,16 +2512,92 @@ a.xtg-name:hover{text-decoration:underline}
     if (S.cur && S.cur.type === 'video' && !S.curBuffered) { setTimeout(() => afterBuffered(rid, fn), 300); return; }
     fn();
   }
-  function thumbVideo(v, item, onFail) {
-    thumbVideoQueue(async () => {
-      while (mainVideoBusy()) await sleep(300);
-      if (!v.isConnected) return; // the thumbnail was replaced meanwhile
-      await new Promise((done) => {
-        const t = setTimeout(done, 8000);
-        v.addEventListener('loadeddata', () => { clearTimeout(t); done(); }, { once: true });
-        loadVideo(v, item, () => { clearTimeout(t); onFail(); done(); }, '#t=1');
-      });
+
+  // One frame of the file (at 1 s, or 10% into a short clip) on a canvas; the file is closed as soon as it is drawn.
+  // cors: ask with CORS so the frame can also be saved as a JPEG. Resolves a canvas, 'error', or null (too slow).
+  function grabFrame(url, cors) {
+    return new Promise((resolve) => {
+      const v = mediaEl('video', { muted: true, preload: 'metadata' });
+      let done = false;
+      const finish = (res) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        killVideo(v);
+        resolve(res);
+      };
+      const timer = setTimeout(() => finish(null), FRAME_TIMEOUT_MS);
+      const draw = () => {
+        try {
+          const w = Math.min(FRAME_W, v.videoWidth || FRAME_W);
+          const h = Math.max(1, Math.round(((v.videoHeight || 9) * w) / (v.videoWidth || 16)));
+          const c = el('canvas', { width: w, height: h });
+          c.getContext('2d').drawImage(v, 0, 0, w, h);
+          finish(c);
+        } catch (e) { finish('error'); }
+      };
+      if (cors) v.crossOrigin = 'anonymous';
+      v.onloadedmetadata = () => { v.currentTime = Math.min(1, (v.duration || 10) * 0.1); };
+      v.onseeked = () => { if (v.readyState >= 2) draw(); else v.addEventListener('loadeddata', draw, { once: true }); };
+      v.onerror = () => finish('error');
+      v.src = url;
     });
+  }
+
+  // A frame readable by the page (same origin, or a host that allows CORS) is kept as the item's thumbnail and
+  // saved, so the next visit shows it without opening the video at all
+  function saveFrame(item, c) {
+    let data;
+    try { data = c.toDataURL('image/jpeg', 0.75); } catch (e) { return; } // drawn from a host without CORS
+    item.thumb = data;
+    cache.put('t:' + item.key, { thumb: data });
+    const v = S.cur === item && ui.stage.querySelector(':scope > video');
+    if (v && !v.poster) v.poster = data;
+  }
+
+  // The item's frame: a canvas, null (too slow: asked again by the next tile built), or 'dead' (no file opens,
+  // handled here once: the host's player when there is one, else dead)
+  function videoFrame(item) {
+    if (!item.framePromise) {
+      item.framePromise = thumbVideoQueue(async () => {
+        while (mainVideoBusy()) await sleep(300);
+        if (item.dead || item.type !== 'video' || await item.thumbCached) return null; // a saved thumbnail turned up
+        let slow = false;
+        for (const u of uniq([item.sd, ...item.candidates])) {
+          const x = abs(u);
+          if (!x) continue;
+          const h = hostOf(x.href);
+          // a host known not to allow CORS is asked without it straight away (one request, not two)
+          const cors = x.origin !== location.origin && vhosts.get(h).cors !== false;
+          let f = await grabFrame(x.href, cors);
+          if (f === 'error' && cors) {
+            f = await grabFrame(x.href, false);
+            if (f && f !== 'error') vhosts.set(h, { cors: false });
+          }
+          if (f && f !== 'error') { saveFrame(item, f); return f; }
+          if (!f) slow = true;
+        }
+        return slow ? null : 'dead';
+      }).then((f) => {
+        if (!f) item.framePromise = null;
+        if (f === 'dead' && item.type === 'video' && !item.dead) videoFail(item);
+        return f;
+      });
+    }
+    return item.framePromise;
+  }
+
+  // A canvas showing the item's frame, asked for only once it is near the screen (never while its view is hidden)
+  function frameCanvas(item) {
+    const c = el('canvas');
+    c.xtgStart = () => videoFrame(item).then((f) => {
+      if (!f || f === 'dead' || !c.isConnected) return;
+      c.width = f.width;
+      c.height = f.height;
+      c.getContext('2d').drawImage(f, 0, 0);
+    });
+    lazyObserver.observe(c);
+    return c;
   }
 
   // Open the connection (DNS, TLS) to the next item's host ahead of time; costs next to nothing
@@ -2556,7 +2638,7 @@ a.xtg-name:hover{text-decoration:underline}
     v.addEventListener('canplaythrough', () => { if (PREP.v === v) v.preload = 'metadata'; }, { once: true });
     PREP.item = next;
     PREP.v = v;
-    loadVideo(v, next, () => { if (PREP.v === v) dropPrepared(); }, '', urls);
+    loadVideo(v, next, () => { if (PREP.v === v) dropPrepared(); }, urls);
   }
 
   // The stage's video element: the prepared one when it is this item, else a fresh one. It plays while it
@@ -2711,14 +2793,12 @@ a.xtg-name:hover{text-decoration:underline}
       if (item.thumb) {
         const img = el('img', { loading: 'lazy', alt: '', referrerPolicy: 'no-referrer', src: item.thumb });
         img.onerror = () => {
-          img.replaceWith(el('div', { className: 'xtg-ph', innerHTML: ic('play', 30, true) }));
+          img.replaceWith(item.type === 'video' ? frameCanvas(item) : el('div', { className: 'xtg-ph', innerHTML: ic('play', 30, true) }));
           ensureThumb(item, img.src);
         };
         t.appendChild(img);
       } else if (item.type === 'video') {
-        const v = mediaEl('video', { muted: true, preload: 'metadata' });
-        thumbVideo(v, item, () => videoFail(item));
-        t.appendChild(v);
+        t.appendChild(frameCanvas(item));
       } else {
         t.innerHTML = `<div class="xtg-ph">${ic('play', 30, true)}${esc(hostOf(item.url))}</div>`;
       }
@@ -2756,8 +2836,18 @@ a.xtg-name:hover{text-decoration:underline}
     return listVideoObs;
   }
 
+  // A tile going away lets go of its video (connection, buffer, decoder) at once, not whenever it is garbage
+  // collected, and the scroll view's observer stops holding on to it
+  function dropTile(node) {
+    node.querySelectorAll('video').forEach((v) => {
+      if (listVideoObs) listVideoObs.unobserve(v);
+      killVideo(v);
+    });
+  }
+
   function replaceTile(item) {
     const fresh = buildTile(item);
+    dropTile(item.el);
     item.el.replaceWith(fresh);
     item.el = fresh;
   }
@@ -2879,12 +2969,13 @@ a.xtg-name:hover{text-decoration:underline}
     } else {
       if (item.thumb) {
         const img = el('img', { loading: 'lazy', alt: '', referrerPolicy: 'no-referrer', src: item.thumb });
-        img.onerror = () => { img.remove(); ensureThumb(item, img.src); };
+        img.onerror = () => {
+          if (item.type === 'video') img.replaceWith(frameCanvas(item)); else img.remove();
+          ensureThumb(item, img.src);
+        };
         th.appendChild(img);
       } else if (item.type === 'video') {
-        const v = mediaEl('video', { muted: true, preload: 'metadata' });
-        thumbVideo(v, item, () => v.remove());
-        th.appendChild(v);
+        th.appendChild(frameCanvas(item));
       }
       th.insertAdjacentHTML('beforeend', `<span>${ic('play', 18, true)}</span>`);
     }
@@ -2923,38 +3014,6 @@ a.xtg-name:hover{text-decoration:underline}
     return urls.poster || urls.thumbnail || null;
   }
 
-  // Grab one frame as a JPEG (only works for same-origin videos or servers that allow CORS)
-  function captureFrame(url) {
-    return new Promise((resolve) => {
-      const x = abs(url);
-      if (!x) { resolve(null); return; }
-      // metadata only: the seek below asks for just the part around that frame, not the start of the whole file
-      const v = mediaEl('video', { muted: true, preload: 'metadata' });
-      let done = false;
-      const finish = (res) => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        v.removeAttribute('src');
-        try { v.load(); } catch (e) { /* ignore */ }
-        resolve(res);
-      };
-      const timer = setTimeout(() => finish(null), 15000);
-      if (x.origin !== location.origin) v.crossOrigin = 'anonymous';
-      v.onloadedmetadata = () => { v.currentTime = Math.min(1.5, (v.duration || 10) * 0.1); };
-      v.onseeked = () => {
-        try {
-          const w = Math.min(480, v.videoWidth || 480);
-          const c = el('canvas', { width: w, height: Math.round(((v.videoHeight || 270) * w) / (v.videoWidth || 480)) });
-          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-          finish(c.toDataURL('image/jpeg', 0.75));
-        } catch (e) { finish(null); } // tainted canvas (no CORS)
-      };
-      v.onerror = () => finish(null);
-      v.src = x.href;
-    });
-  }
-
   const OEMBED = [
     [/vimeo\.com\/(?:video\/)?(\d+)/, (id) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent('https://vimeo.com/' + id)}`],
     [/streamable\.com\/(?:[eos]\/)?(\w{4,})/, (id) => `https://api.streamable.com/oembed.json?url=${encodeURIComponent('https://streamable.com/' + id)}`],
@@ -2966,11 +3025,7 @@ a.xtg-name:hover{text-decoration:underline}
     const ok = (x) => (x && x !== failed ? x : null);
     let t, m;
     try {
-      if (item.type === 'video') {
-        // the lighter version first, and only once the video being watched has buffered enough
-        while (mainVideoBusy()) await sleep(300);
-        for (const c of uniq([item.sd, ...item.candidates])) if ((t = ok(await captureFrame(c)))) return t;
-      }
+      // (a frame of the video itself is drawn by videoFrame, when a thumbnail of it comes into view)
       for (const [re, endpoint] of OEMBED) {
         if ((m = text.match(re)) && (t = ok(await oembedThumb(endpoint(m[1]))))) return t;
       }
@@ -2985,14 +3040,16 @@ a.xtg-name:hover{text-decoration:underline}
     if (item.thumbBusy || (item.thumbTries || 0) >= 2) return;
     item.thumbBusy = true;
     item.thumbTries = (item.thumbTries || 0) + 1;
-    (async () => {
-      const key = 't:' + item.key;
-      const hit = !failed && !S.noCache && await cache.get(key, THUMB_TTL);
-      if (hit) return hit.thumb;
+    const key = 't:' + item.key;
+    // videoFrame waits for this, so a thumbnail saved on an earlier visit spares opening the video
+    item.thumbCached = failed || S.noCache ? Promise.resolve(null)
+      : cache.get(key, THUMB_TTL).then((hit) => (hit && hit.thumb) || null, () => null);
+    item.thumbCached.then(async (hit) => {
+      if (hit) return hit;
       const t = await thumbQueue(() => findThumb(item, failed));
       if (t) cache.put(key, { thumb: t });
       return t;
-    })().then((t) => {
+    }).then((t) => {
       if (t && t !== item.thumb && !item.dead) {
         item.thumb = t;
         replaceTile(item);

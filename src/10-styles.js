@@ -119,12 +119,12 @@
   border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:xtg-spin .8s linear infinite;pointer-events:none}
 @keyframes xtg-spin{to{transform:rotate(360deg)}}
 .xtg-th.on{opacity:1;outline-color:#1f6feb}
-.xtg-th img,.xtg-th video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.xtg-th img,.xtg-th video,.xtg-th canvas{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .xtg-th span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 3px #000}
 .xtg-scroll{position:absolute;inset:0;overflow:auto;scrollbar-color:#3a3d44 transparent;padding:12px 14px 30px}
 .xtg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px}
 .xtg-tile{position:relative;aspect-ratio:1;background:#1b1d21;border-radius:5px;overflow:hidden;cursor:pointer}
-.xtg-tile img,.xtg-tile video{width:100%;height:100%;object-fit:cover;display:block}
+.xtg-tile img,.xtg-tile video,.xtg-tile canvas{width:100%;height:100%;object-fit:cover;display:block}
 .xtg-badge{display:inline-flex;align-items:center;gap:4px;position:absolute;top:6px;left:6px;background:rgba(0,0,0,.7);color:#fff;
   border-radius:4px;padding:2px 6px;font-size:12px;pointer-events:none}
 .xtg-ph{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
