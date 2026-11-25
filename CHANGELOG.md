@@ -19,10 +19,15 @@ Version numbers: `2.0.1` for fixes, `2.1.0` for new features, `3.0.0` for big ch
 -
 
 ### Changed
-- Much lighter threads with many videos that have no thumbnail: each such video is opened only to draw one frame for its tile and filmstrip thumbnail, then closed at once, one at a time and only when it comes near the screen. Before, every one stayed open in both the grid (even while hidden) and the filmstrip, so a page of 10 videos kept about 20 video players decoding at once and could choke RAM and CPU. Frames from the forum itself or hosts that allow it are saved, so the next visit opens no video for them.
+-
 
 ### Fixed
 -
+
+## [3.2.2] - 2026-11-26
+
+### Changed
+- Much lighter threads with many videos that have no thumbnail: each such video is opened only to draw one frame for its tile and filmstrip thumbnail, then closed at once, one at a time and only when it comes near the screen. Before, every one stayed open in both the grid (even while hidden) and the filmstrip, so a page of 10 videos kept about 20 video players decoding at once and could choke RAM and CPU. Frames from the forum itself or hosts that allow it are saved, so the next visit opens no video for them.
 
 ## [3.2.1] - 2026-11-25
 
